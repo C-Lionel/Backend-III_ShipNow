@@ -1,4 +1,4 @@
-import usersService from "../services/usersService.js";
+import usersService from "../services/users.service.js";
 
 class UsersController {
   async findAll(req, res) {
@@ -33,7 +33,7 @@ class UsersController {
 
   async create(req, res) {
     try {
-      const user = usersService.create(req.body);
+      const user = await usersService.create(req.body);
       return res.status(201).json({
         status: "success",
         payload: user,
