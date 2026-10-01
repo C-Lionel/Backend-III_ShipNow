@@ -7,11 +7,11 @@ class ProductsRepository {
   }
 
   async getAvailable() {
-  return Product.find({
-    stock: { $gt: 0 },
-    status: PRODUCT_STATUS.AVAILABLE
-  });
-}
+    return Product.find({
+      stock: { $gt: 0 },
+      status: PRODUCT_STATUS.AVAILABLE
+    });
+  }
 
   async getById(id) {
     return Product.findById(id);

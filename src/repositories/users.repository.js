@@ -1,28 +1,33 @@
 import User from "../models/user.model.js";
 
 class UsersRepository {
-    async findAll(){
-        return User.find()
-    }
+  async findAll() {
+    return User.find().select("-password");
+  }
 
-    async findById(id){
-        return User.findById(id)
-    }
+  async findById(id) {
+    return User.findById(id).select("-password");
+  }
 
-    async findByEmail(email){
-        return User.findOne({email})
-    }
-    async create(user){
-        return User.create(user)
-    }
+  async findByEmail(email) {
+    return User.findOne({ email });
+  }
 
-    async update(id, updatedUser){
-        return User.findByIdAndUpdate(id, updatedUser, {new: true})
-    }
+  async create(user) {
+    return User.create(user);
+  }
 
-    async delete(id){
-        return User.findByIdAndDelete(id)
-    }
+  async update(id, updatedUser) {
+    return User.findByIdAndUpdate(
+      id,
+      updatedUser,
+      { new: true }
+    ).select("-password");
+  }
+
+  async delete(id) {
+    return User.findByIdAndDelete(id).select("-password");
+  }
 }
 
-export default new UsersRepository()
+export default new UsersRepository();

@@ -49,7 +49,7 @@ class UsersController {
   async update(req, res) {
     try {
       const updatedUser = await usersService.update(req.params.id, req.body);
-      return res.status(201).json({
+      return res.status(200).json({
         status: "success",
         payload: updatedUser,
       });
@@ -64,7 +64,7 @@ class UsersController {
   async delete(req, res) {
     try {
       const deletedUser = await usersService.delete(req.params.id);
-      return res.status(201).json({
+      return res.status(200).json({
         status: "success",
         payload: deletedUser,
       });

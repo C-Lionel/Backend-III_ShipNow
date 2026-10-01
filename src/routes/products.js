@@ -3,28 +3,16 @@ import { productsController } from '../controllers/products.controller.js';
 
 const router = Router();
 
-router.get('/', (req, res) => {
-  productsController.getAll(req, res);
-});
+router.get('/', productsController.getAll);
 
-router.get('/:id/shipping-cost', (req, res) => {
-  productsController.getShippingCost(req, res);
-});
+router.get('/:id/shipping-cost', productsController.getShippingCost);
 
-router.get('/:id', (req, res) => {
-  productsController.getById(req, res);
-});
+router.get('/:id', productsController.getById);
 
-router.post('/', (req, res) => {
-  productsController.create(req, res);
-});
+router.post('/', productsController.create);
 
-router.put('/:id', (req, res) => {
-  productsController.update(req, res);
-});
+router.put('/:id', productsController.update);
 
-router.delete('/:id', (req, res) => {
-  productsController.delete(req, res);
-});
+router.delete('/:id', productsController.delete);
 
 export default router;
