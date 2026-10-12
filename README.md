@@ -2,7 +2,9 @@
 
 API backend de ShipNow desarrollada con Node.js, Express y MongoDB.
 
-El proyecto fue refactorizado utilizando una arquitectura por capas para separar las responsabilidades de acceso HTTP, lógica de negocio y persistencia de datos.
+El proyecto utiliza una arquitectura por capas para separar las responsabilidades de acceso HTTP, lógica de negocio y persistencia de datos.
+
+En el Módulo 2 se incorporó la gestión de pedidos y entregas, junto con un sistema de generación de datos simulados (Mocks) y un proceso de carga de datos de prueba (Seed).
 
 ## Tecnologías
 
@@ -12,10 +14,11 @@ El proyecto fue refactorizado utilizando una arquitectura por capas para separar
 - Mongoose
 - dotenv
 - Nodemon
+- bcryptjs
 
 ## Arquitectura
 
-La aplicación utiliza una arquitectura de tres capas para separar las responsabilidades de acceso HTTP, lógica de negocio y persistencia de datos.
+La aplicación utiliza una arquitectura por capas para separar las responsabilidades.
 
 ```text
 Route
@@ -35,7 +38,7 @@ MongoDB
 
 Es la puerta de entrada HTTP de la aplicación.
 
-Se encarga de recibir `req` y `res`, llamar al Service correspondiente y devolver la respuesta HTTP con el código de estado adecuado.
+Se encarga de recibir las solicitudes, llamar al Service correspondiente y devolver las respuestas HTTP con los códigos de estado adecuados.
 
 ### Service
 
@@ -43,21 +46,27 @@ Contiene la lógica de negocio de la aplicación.
 
 Por ejemplo:
 
-- Validar los datos necesarios para crear un producto.
-- Evitar productos con códigos duplicados.
-- Determinar el estado de un producto según su stock.
-- Evitar la creación de usuarios administradores desde el endpoint común.
-- Verificar si un email ya se encuentra registrado.
+- Verificar que un email no esté registrado.
+- Evitar la asignación de roles privilegiados desde el registro público.
+- Aplicar bcrypt a las contraseñas de usuarios.
+- Verificar que un pedido pertenezca a un cliente válido.
+- Comprobar que un repartidor tenga el rol correspondiente.
+- Evitar la creación de entregas duplicadas para un mismo pedido.
+- Coordinar la generación e inserción de datos simulados.
 
 ### Repository
 
-Es la única capa que accede directamente a Mongoose y MongoDB.
+Encapsula las operaciones habituales de acceso a MongoDB mediante Mongoose.
 
-Se encarga de realizar consultas, aplicar filtros y definir proyecciones de datos.
+Se encarga de realizar consultas, crear documentos, actualizarlos y eliminarlos.
 
-Por ejemplo, el Repository de productos permite consultar únicamente productos disponibles y el Repository de usuarios excluye la contraseña en las consultas destinadas a devolver información de usuarios.
+Por ejemplo, el Repository de usuarios excluye la contraseña de las respuestas de consulta.
 
-Esta separación permite que el Service se concentre en las reglas de negocio, mientras que el Repository encapsula los detalles de persistencia y acceso a la base de datos.
+### Mocks
+
+El módulo de Mocks genera datos simulados para usuarios, repartidores, pedidos y entregas.
+
+Permite probar la estructura de los datos y sus relaciones sin necesidad de insertarlos en MongoDB.
 
 ## Estructura del proyecto
 
@@ -66,6 +75,7 @@ src/
 ├── config/
 ├── constants/
 ├── controllers/
+├── mocks/
 ├── models/
 ├── repositories/
 ├── routes/
@@ -80,6 +90,8 @@ src/
 - Node.js 18 o superior
 - MongoDB local o MongoDB Atlas
 - npm
+
+Para utilizar el proceso de Seed con transacciones, MongoDB debe admitir transacciones, por ejemplo mediante un replica set o un clúster compatible de MongoDB Atlas.
 
 ## Instalación
 
@@ -96,13 +108,10 @@ Ejemplo:
 ```env
 PORT=8080
 MONGODB_URI=mongodb+srv://usuario:password@cluster.mongodb.net/shipnow
-JWT_SECRET=tu_clave_secreta
 NODE_ENV=development
 ```
 
-Las variables `PORT`, `MONGODB_URI` y `NODE_ENV` son validadas al iniciar la aplicación.
-
-Si falta alguna de estas variables, la aplicación informa qué variable falta y no inicia.
+Las variables `PORT`, `MONGODB_URI` y `NODE_ENV` son obligatorias para iniciar la aplicación.
 
 El archivo `.env` no debe subirse al repositorio porque puede contener información sensible.
 
@@ -122,79 +131,177 @@ npm start
 
 ## Endpoints
 
+### Health Check
+
 | Método | Ruta | Descripción |
-| --- | --- | --- |
-| GET | `/api/health` | Health check de la API |
+|---|---|---|
+| GET | `/api/health` | Verificar el funcionamiento de la API |
+
+### Usuarios
+
+| Método | Ruta | Descripción |
+|---|---|---|
 | GET | `/api/users` | Listar usuarios |
-| POST | `/api/users` | Crear un usuario |
+| POST | `/api/users` | Registrar un cliente |
 | GET | `/api/users/:id` | Obtener un usuario por ID |
 | PUT | `/api/users/:id` | Actualizar un usuario |
 | DELETE | `/api/users/:id` | Eliminar un usuario |
-| GET | `/api/products` | Listar productos disponibles con stock |
-| GET | `/api/products?all=true` | Listar todos los productos |
-| POST | `/api/products` | Crear un producto |
-| GET | `/api/products/:id` | Obtener un producto por ID |
-| PUT | `/api/products/:id` | Actualizar un producto |
-| DELETE | `/api/products/:id` | Eliminar un producto |
-| GET | `/api/products/:id/shipping-cost` | Cotizar el envío de un producto |
 
-## Configuración de entorno
+El registro público permite crear usuarios con rol `customer`. Las contraseñas se almacenan utilizando bcrypt y se excluyen de las respuestas de consulta.
 
-La configuración de las variables de entorno se encuentra centralizada en la capa `config`.
+### Pedidos
 
-Esto permite evitar llamadas directas a `process.env` desde otras partes de la aplicación.
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/api/orders` | Listar pedidos |
+| POST | `/api/orders` | Crear un pedido |
+| GET | `/api/orders/:id` | Obtener un pedido por ID |
+| PUT | `/api/orders/:id` | Actualizar un pedido |
+| DELETE | `/api/orders/:id` | Eliminar un pedido |
 
-Las variables obligatorias son:
+Cada pedido se relaciona con un usuario de rol `customer` y puede estar asociado a una entrega.
 
-```text
-PORT
-MONGODB_URI
-NODE_ENV
+### Entregas
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/api/deliveries` | Listar entregas |
+| POST | `/api/deliveries` | Crear una entrega |
+| GET | `/api/deliveries/:id` | Obtener una entrega por ID |
+| PUT | `/api/deliveries/:id` | Actualizar una entrega |
+| DELETE | `/api/deliveries/:id` | Eliminar una entrega |
+
+Cada entrega está asociada a un pedido y puede tener un repartidor asignado.
+
+Los repartidores se representan mediante usuarios con rol `driver`.
+
+### Mocks
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/api/mocks/users?qty=5` | Generar usuarios simulados |
+| GET | `/api/mocks/drivers?qty=5` | Generar repartidores simulados |
+| GET | `/api/mocks/orders?qty=5` | Generar pedidos simulados |
+| GET | `/api/mocks/deliveries?qty=5` | Generar entregas simuladas |
+| POST | `/api/mocks/seed` | Insertar datos simulados en MongoDB |
+
+Los endpoints GET de Mocks generan datos en memoria y no realizan inserciones en la base de datos.
+
+## Seed de datos simulados
+
+El endpoint `POST /api/mocks/seed` permite insertar datos de prueba relacionados en MongoDB.
+
+Ejemplo de solicitud:
+
+```json
+{
+  "qty": 2
+}
 ```
 
-Al iniciar la aplicación se valida la existencia de estas variables. Si alguna no está configurada, se lanza un error descriptivo y la aplicación no inicia.
+Respuesta esperada:
+
+```json
+{
+  "status": "success",
+  "message": "Datos simulados insertados correctamente",
+  "payload": {
+    "customers": 2,
+    "drivers": 2,
+    "orders": 2,
+    "deliveries": 2
+  }
+}
+```
+
+El proceso realiza las siguientes operaciones:
+
+1. Genera clientes y repartidores con contraseñas hasheadas mediante bcrypt.
+2. Inserta los usuarios en MongoDB.
+3. Genera pedidos asociados a los clientes creados.
+4. Genera entregas asociadas a los pedidos y repartidores.
+5. Actualiza los pedidos con sus correspondientes referencias a las entregas.
+
+Las operaciones se ejecutan dentro de una transacción de MongoDB para evitar inserciones parciales si ocurre un error.
+
+### Restricciones del Seed
+
+- Solo se permite cuando `NODE_ENV=development`.
+- La cantidad debe ser un número entero entre 1 y 100.
+- Si se solicita una cantidad inválida, la API devuelve un error `400`.
+- Si se intenta ejecutar fuera del entorno de desarrollo, devuelve un error `403`.
+
+**Importante:** el endpoint de Seed modifica la base de datos. Debe utilizarse únicamente en un entorno de desarrollo controlado.
 
 ## Constantes
 
-Los roles de usuario y los estados de los productos se encuentran centralizados mediante objetos de constantes inmutables.
+Las constantes del dominio se encuentran centralizadas en `src/constants/index.js` mediante objetos inmutables.
 
 ### Roles de usuario
 
 ```text
-ADMIN
-USER
+admin
+customer
+driver
+store
 ```
 
-### Estados de producto
+### Estados de pedidos
 
 ```text
-AVAILABLE
-OUT_OF_STOCK
+created
+assigned
+picked_up
+in_transit
+delivered
+cancelled
 ```
 
-Esto permite evitar strings mágicos repetidos a lo largo del código y centralizar los valores utilizados por el dominio.
+### Estados de entregas
+
+```text
+pending
+assigned
+in_transit
+delivered
+```
+
+### Prioridades de entrega
+
+```text
+low
+normal
+high
+```
+
+### Tipos de documentos
+
+```text
+user_document
+driver_license
+delivery_proof
+```
+
+Esta centralización evita repetir valores literales en diferentes partes de la aplicación y facilita las validaciones.
 
 ## Separación entre Service y Repository
 
 La capa **Service** contiene las reglas y decisiones propias del negocio.
 
-Por ejemplo, determina el estado de un producto según su stock, evita la creación de administradores desde el endpoint común y comprueba si un email ya se encuentra registrado.
+Por ejemplo, valida los datos de los pedidos, verifica los roles de usuarios y repartidores y controla las condiciones necesarias para crear entregas.
 
-La capa **Repository**, en cambio, se ocupa exclusivamente del acceso y persistencia de los datos mediante Mongoose.
+La capa **Repository** encapsula las operaciones habituales de persistencia y consulta mediante Mongoose.
 
-Los Repositories encapsulan las consultas a MongoDB y pueden aplicar filtros o proyecciones, como obtener únicamente productos disponibles o excluir la contraseña al consultar usuarios.
-
-De esta manera, la lógica de negocio permanece separada de los detalles relacionados con la base de datos.
+Para el proceso de Seed se utiliza un servicio específico que coordina directamente las inserciones y actualizaciones dentro de una transacción de MongoDB.
 
 ## Scripts
 
 | Comando | Uso |
-| --- | --- |
+|---|---|
 | `npm run dev` | Ejecutar en desarrollo con Nodemon |
 | `npm start` | Ejecutar la aplicación |
 
 ## Información de la entrega
 
 **Curso:** Backend III  
-**Alumno:** Lionel Cancellieri  
-**Entrega:** Pre-entrega Módulo 1 — Estructura profesional de ShipNow
+**Entrega:** Pre-entrega Módulo 2 — Mocks y Seed de ShipNow

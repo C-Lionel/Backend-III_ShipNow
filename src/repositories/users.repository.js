@@ -14,8 +14,10 @@ class UsersRepository {
   }
 
   async create(user) {
-    return User.create(user);
-  }
+  const newUser = await User.create(user);
+
+  return User.findById(newUser._id).select("-password");
+}
 
   async update(id, updatedUser) {
     return User.findByIdAndUpdate(
