@@ -1,23 +1,38 @@
+import AppError from '../utils/errors.js';
+import { ErrorDictionary } from '../utils/errorDictionary.js';
 
 const errorMiddleware = (err, req, res, next) => {
-  let statusCode = err.statusCode || 500;
-  let message = err.message || "Error interno del servidor";
 
-  // Errores de validación de Mongoose
-  if (err.name === "ValidationError") {
-    statusCode = 400;
-    message = err.message;
-  }
-
-  // IDs inválidos u otros errores de conversión
   if (err.name === "CastError") {
-    statusCode = 400;
-    message = "El identificador o valor proporcionado no es válido";
+    err = new AppError(ErrorDictionary.INVALID_ID);
   }
+
+  if (err.type === "entity.parse.failed") {
+    err = new AppError(ErrorDictionary.INVALID_JSON);
+  }
+
+  if (err.name === "ValidationError") {
+    err = new AppError(ErrorDictionary.VALIDATION_ERROR);
+  }
+
+  const isAppError = err instanceof AppError;
+
+  const statusCode = isAppError
+    ? err.statusCode
+    : ErrorDictionary.INTERNAL_SERVER_ERROR.statusCode;
+
+  const message = isAppError
+    ? err.message
+    : ErrorDictionary.INTERNAL_SERVER_ERROR.message;
+
+  const code = isAppError
+    ? err.code
+    : ErrorDictionary.INTERNAL_SERVER_ERROR.code;
 
   res.status(statusCode).json({
     status: "error",
-    message
+    message,
+    code
   });
 };
 

@@ -9,6 +9,11 @@ import mocksRouter from './routes/mocks.js';
 
 import errorMiddleware from './middlewares/error.middleware.js';
 
+import AppError from './utils/errors.js';
+import { ErrorDictionary } from './utils/errorDictionary.js';
+
+
+
 const app = express();
 
 app.use(cors());
@@ -30,11 +35,8 @@ app.get('/api/health', (req, res) => {
 });
 
 // Rutas que no existen
-app.use((req, res) => {
-  res.status(404).json({
-    status: 'error',
-    message: 'Ruta no encontrada'
-  });
+app.use((req, res, next) => {
+  next(new AppError(ErrorDictionary.ROUTE_NOT_FOUND));
 });
 
 // Manejo centralizado de errores

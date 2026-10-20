@@ -2,6 +2,7 @@
 import ordersRepository from "../repositories/orders.repository.js";
 import usersRepository from "../repositories/users.repository.js";
 import AppError from "../utils/errors.js";
+import { ErrorDictionary } from "../utils/errorDictionary.js";
 import {
   USER_ROLES,
   ORDER_STATUS,
@@ -17,7 +18,7 @@ class OrdersService {
     const order = await ordersRepository.findById(id);
 
     if (!order) {
-      throw new AppError("Pedido no encontrado", 404);
+      throw new AppError(ErrorDictionary.ORDER_NOT_FOUND);
     }
 
     return order;
@@ -27,15 +28,15 @@ class OrdersService {
     const customer = await usersRepository.findById(orderData.customer);
 
     if (!customer) {
-      throw new AppError("El cliente especificado no existe", 400);
+      throw new AppError(ErrorDictionary.ORDER_CUSTOMER_NOT_FOUND);
     }
 
     if (customer.role !== USER_ROLES.CUSTOMER) {
-      throw new AppError("El usuario no tiene rol de customer", 400);
+      throw new AppError(ErrorDictionary.INVALID_CUSTOMER_ROLE);
     }
 
     if (!Array.isArray(orderData.items) || orderData.items.length === 0) {
-      throw new AppError("El pedido debe tener al menos un item", 400);
+      throw new AppError(ErrorDictionary.ORDER_ITEMS_REQUIRED);
     }
 
     const itemsTotal = orderData.items.reduce(
@@ -58,7 +59,6 @@ class OrdersService {
     });
   }
 
-
   async update(id, orderData) {
     const protectedFields = [
       "customer",
@@ -74,10 +74,7 @@ class OrdersService {
     );
 
     if (hasProtectedFields) {
-      throw new AppError(
-        "No está permitido modificar campos protegidos del pedido",
-        403
-      );
+      throw new AppError(ErrorDictionary.ORDER_PROTECTED_FIELDS);
     }
 
     const updatedOrder = await ordersRepository.update(
@@ -86,31 +83,25 @@ class OrdersService {
     );
 
     if (!updatedOrder) {
-      throw new AppError("Pedido no encontrado", 404);
+      throw new AppError(ErrorDictionary.ORDER_NOT_FOUND);
     }
 
     return updatedOrder;
   }
 
-
-
   async delete(id) {
     const order = await ordersRepository.findById(id);
 
     if (!order) {
-      throw new AppError("Pedido no encontrado", 404);
+      throw new AppError(ErrorDictionary.ORDER_NOT_FOUND);
     }
 
     if (order.delivery) {
-      throw new AppError(
-        "No se puede eliminar un pedido que tiene una entrega asociada",
-        409
-      );
+      throw new AppError(ErrorDictionary.ORDER_HAS_DELIVERY);
     }
 
     return ordersRepository.delete(id);
   }
-
 }
 
 export default new OrdersService();

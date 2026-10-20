@@ -1,9 +1,9 @@
-
 import bcrypt from "bcryptjs";
 
 import { USER_ROLES } from "../constants/index.js";
 import usersRepository from "../repositories/users.repository.js";
 import AppError from "../utils/errors.js";
+import { ErrorDictionary } from "../utils/errorDictionary.js";
 
 class UsersService {
   async findAll() {
@@ -14,7 +14,7 @@ class UsersService {
     const user = await usersRepository.findById(id);
 
     if (!user) {
-      throw new AppError("Usuario no encontrado", 404);
+      throw new AppError(ErrorDictionary.USER_NOT_FOUND);
     }
 
     return user;
@@ -25,18 +25,21 @@ class UsersService {
       user.role !== undefined &&
       user.role !== USER_ROLES.CUSTOMER
     ) {
-      throw new AppError(
-        "Solo se permite registrar usuarios con rol customer",
-        403
-      );
+      throw new AppError(ErrorDictionary.USER_ROLE_FORBIDDEN);
     }
+
     const existingUser = await usersRepository.findByEmail(user.email);
 
     if (existingUser) {
-      throw new AppError(
-        "Este email ya se encuentra registrado",
-        409
-      );
+      throw new AppError(ErrorDictionary.EMAIL_ALREADY_EXISTS);
+    }
+
+    // Validamos la contraseña antes de aplicar bcrypt.
+    if (
+      typeof user.password !== "string" ||
+      !user.password.trim()
+    ) {
+      throw new AppError(ErrorDictionary.INVALID_PASSWORD);
     }
 
     const hashedPassword = await bcrypt.hash(user.password, 12);
@@ -48,17 +51,12 @@ class UsersService {
     });
   }
 
-
-
   async update(id, user) {
     const dataToUpdate = { ...user };
 
     // No permitimos modificar roles desde este endpoint.
     if (dataToUpdate.role !== undefined) {
-      throw new AppError(
-        "No está permitido modificar el rol de un usuario",
-        403
-      );
+      throw new AppError(ErrorDictionary.USER_ROLE_UPDATE_FORBIDDEN);
     }
 
     // Si se modifica la contraseña, aplicamos bcrypt.
@@ -67,10 +65,7 @@ class UsersService {
         typeof dataToUpdate.password !== "string" ||
         !dataToUpdate.password.trim()
       ) {
-        throw new AppError(
-          "La contraseña no puede estar vacía",
-          400
-        );
+        throw new AppError(ErrorDictionary.INVALID_PASSWORD);
       }
 
       dataToUpdate.password = await bcrypt.hash(
@@ -85,19 +80,17 @@ class UsersService {
     );
 
     if (!updatedUser) {
-      throw new AppError("Usuario no encontrado", 404);
+      throw new AppError(ErrorDictionary.USER_NOT_FOUND);
     }
 
     return updatedUser;
   }
 
-
-
   async delete(id) {
     const deletedUser = await usersRepository.delete(id);
 
     if (!deletedUser) {
-      throw new AppError("Usuario no encontrado", 404);
+      throw new AppError(ErrorDictionary.USER_NOT_FOUND);
     }
 
     return deletedUser;

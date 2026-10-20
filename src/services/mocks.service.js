@@ -9,6 +9,8 @@ import { generateMockDeliveries } from "../mocks/deliveries.mock.js";
 
 import AppError from "../utils/errors.js";
 
+import { ErrorDictionary } from "../utils/errorDictionary.js";
+
 class MocksService {
   validateQuantity(quantity) {
     const parsedQuantity = Number(quantity);
@@ -18,10 +20,7 @@ class MocksService {
       parsedQuantity < 1 ||
       parsedQuantity > 100
     ) {
-      throw new AppError(
-        "La cantidad debe ser un número entero entre 1 y 100",
-        400
-      );
+      throw new AppError(ErrorDictionary.INVALID_MOCK_QUANTITY);
     }
 
     return parsedQuantity;

@@ -12,12 +12,10 @@ import { generateMockUsers } from "../mocks/users.mock.js";
 import { generateMockOrders } from "../mocks/orders.mock.js";
 import { generateMockDeliveries } from "../mocks/deliveries.mock.js";
 
-class SeedError extends Error {
-  constructor(message, statusCode) {
-    super(message);
-    this.statusCode = statusCode;
-  }
-}
+import AppError from "../utils/errors.js";
+import { ErrorDictionary } from "../utils/errorDictionary.js";
+
+
 
 class MocksSeedService {
   async seedUsers(quantity, session) {
@@ -103,10 +101,7 @@ class MocksSeedService {
   async seed(quantity = 10) {
     // El seed solamente puede ejecutarse en desarrollo.
     if (process.env.NODE_ENV !== "development") {
-      throw new SeedError(
-        "El seed solo está permitido en desarrollo",
-        403
-      );
+      throw new AppError(ErrorDictionary.SEED_FORBIDDEN);
     }
 
     // Validamos la cantidad solicitada.
@@ -117,10 +112,7 @@ class MocksSeedService {
       qty < 1 ||
       qty > 100
     ) {
-      throw new SeedError(
-        "La cantidad debe ser un número entero entre 1 y 100",
-        400
-      );
+      throw new AppError(ErrorDictionary.INVALID_MOCK_QUANTITY);
     }
 
     // Iniciamos una sesión de MongoDB.
