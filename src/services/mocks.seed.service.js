@@ -15,6 +15,8 @@ import { generateMockDeliveries } from "../mocks/deliveries.mock.js";
 import AppError from "../utils/errors.js";
 import { ErrorDictionary } from "../utils/errorDictionary.js";
 
+import logger from "../utils/logger.js";
+
 
 
 class MocksSeedService {
@@ -115,6 +117,8 @@ class MocksSeedService {
       throw new AppError(ErrorDictionary.INVALID_MOCK_QUANTITY);
     }
 
+    logger.info(`Iniciando seed de ShipNow con cantidad: ${qty}`);
+
     // Iniciamos una sesión de MongoDB.
     const session = await mongoose.startSession();
 
@@ -149,6 +153,12 @@ class MocksSeedService {
           deliveries: deliveries.length
         };
       });
+
+      logger.info(
+        `Seed completado correctamente: ${result.customers} clientes, ` +
+        `${result.drivers} repartidores, ${result.orders} pedidos y ` +
+        `${result.deliveries} entregas`
+      );
 
       return result;
     } finally {

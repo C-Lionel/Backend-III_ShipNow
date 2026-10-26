@@ -1,5 +1,6 @@
-import AppError from '../utils/errors.js';
-import { ErrorDictionary } from '../utils/errorDictionary.js';
+import AppError from "../utils/errors.js";
+import { ErrorDictionary } from "../utils/errorDictionary.js";
+import logger from "../utils/logger.js";
 
 const errorMiddleware = (err, req, res, next) => {
 
@@ -28,6 +29,15 @@ const errorMiddleware = (err, req, res, next) => {
   const code = isAppError
     ? err.code
     : ErrorDictionary.INTERNAL_SERVER_ERROR.code;
+
+  // Registrar el error con Winston
+  if (isAppError) {
+    logger.warning(`${req.method} ${req.originalUrl} - ${code}: ${message}`);
+  } else {
+    logger.error(
+      `${req.method} ${req.originalUrl} - Error inesperado: ${err.stack || err.message}`
+    );
+  }
 
   res.status(statusCode).json({
     status: "error",

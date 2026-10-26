@@ -12,6 +12,8 @@ import errorMiddleware from './middlewares/error.middleware.js';
 import AppError from './utils/errors.js';
 import { ErrorDictionary } from './utils/errorDictionary.js';
 
+import logger from './utils/logger.js';
+
 
 
 const app = express();
@@ -33,6 +35,23 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// Prueba de los niveles de Winston (solo desarrollo)
+if (process.env.NODE_ENV === 'development') {
+  app.get('/api/logger-test', (req, res) => {
+    logger.debug('Prueba de nivel debug');
+    logger.http('Prueba de nivel http');
+    logger.info('Prueba de nivel info');
+    logger.warning('Prueba de nivel warning');
+    logger.error('Prueba de nivel error');
+    logger.fatal('Prueba de nivel fatal');
+
+    res.json({
+      status: 'success',
+      message: 'Prueba de logging ejecutada correctamente'
+    });
+  });
+}
 
 // Rutas que no existen
 app.use((req, res, next) => {

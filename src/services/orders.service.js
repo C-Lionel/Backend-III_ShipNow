@@ -3,6 +3,7 @@ import ordersRepository from "../repositories/orders.repository.js";
 import usersRepository from "../repositories/users.repository.js";
 import AppError from "../utils/errors.js";
 import { ErrorDictionary } from "../utils/errorDictionary.js";
+import logger from "../utils/logger.js";
 import {
   USER_ROLES,
   ORDER_STATUS,
@@ -48,7 +49,7 @@ class OrdersService {
 
     const shippingCost = 10;
 
-    return ordersRepository.create({
+    const newOrder = await ordersRepository.create({
       ...orderData,
       declaredValue,
       shippingCost,
@@ -57,6 +58,10 @@ class OrdersService {
       priority: orderData.priority ?? DELIVERY_PRIORITY.NORMAL,
       delivery: null
     });
+
+    logger.info(`Pedido creado correctamente con ID: ${newOrder._id}`);
+
+    return newOrder;
   }
 
   async update(id, orderData) {

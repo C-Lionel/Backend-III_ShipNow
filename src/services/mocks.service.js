@@ -11,6 +11,8 @@ import AppError from "../utils/errors.js";
 
 import { ErrorDictionary } from "../utils/errorDictionary.js";
 
+import logger from "../utils/logger.js";
+
 class MocksService {
   validateQuantity(quantity) {
     const parsedQuantity = Number(quantity);
@@ -20,6 +22,8 @@ class MocksService {
       parsedQuantity < 1 ||
       parsedQuantity > 100
     ) {
+      logger.warning(`Cantidad inválida solicitada para mocks: ${String(quantity)}`);
+
       throw new AppError(ErrorDictionary.INVALID_MOCK_QUANTITY);
     }
 
@@ -29,17 +33,23 @@ class MocksService {
   generateUsers(quantity = 10) {
     const qty = this.validateQuantity(quantity);
 
+    logger.info(`Generando ${qty} usuarios mock`);
+
     return generateMockUsers(qty, USER_ROLES.CUSTOMER);
   }
 
   generateDrivers(quantity = 10) {
     const qty = this.validateQuantity(quantity);
 
+    logger.info(`Generando ${qty} repartidores mock`);
+
     return generateMockUsers(qty, USER_ROLES.DRIVER);
   }
 
   generateOrders(quantity = 10) {
     const qty = this.validateQuantity(quantity);
+
+    logger.info(`Generando ${qty} pedidos mock`);
 
     const customers = generateMockUsers(qty, USER_ROLES.CUSTOMER);
 
@@ -62,6 +72,8 @@ class MocksService {
 
   generateDeliveries(quantity = 10) {
     const qty = this.validateQuantity(quantity);
+
+    logger.info(`Generando ${qty} entregas mock`);
 
     const customers = generateMockUsers(qty, USER_ROLES.CUSTOMER);
     const drivers = generateMockUsers(qty, USER_ROLES.DRIVER);

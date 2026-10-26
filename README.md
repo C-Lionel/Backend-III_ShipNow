@@ -1,3 +1,4 @@
+
 # ShipNow API
 
 API backend de ShipNow desarrollada con Node.js, Express y MongoDB.
@@ -8,6 +9,8 @@ En el Módulo 2 se incorporó la gestión de pedidos y entregas, junto con un si
 
 En el Módulo 3 se implementó un sistema de manejo centralizado de errores mediante errores personalizados, un diccionario de errores y un middleware global de Express. Esto permite devolver respuestas HTTP consistentes y separar la detección de errores de su presentación al cliente.
 
+En el Módulo 4 se incorporó un sistema de logging centralizado con Winston para registrar eventos importantes, monitorear errores y conservar registros críticos mediante archivos con rotación automática.
+
 ## Tecnologías
 
 - Node.js
@@ -17,6 +20,8 @@ En el Módulo 3 se implementó un sistema de manejo centralizado de errores medi
 - dotenv
 - Nodemon
 - bcryptjs
+- Winston
+- winston-daily-rotate-file
 
 ## Arquitectura
 
@@ -58,6 +63,7 @@ Por ejemplo:
 - Evitar la creación de entregas duplicadas para un mismo pedido.
 - Coordinar la generación e inserción de datos simulados.
 - Detectar condiciones de error y lanzar errores personalizados mediante `AppError`.
+- Registrar eventos importantes mediante el logger centralizado.
 
 ### Repository
 
@@ -77,7 +83,7 @@ Permite probar la estructura de los datos y sus relaciones sin necesidad de inse
 
 Centraliza el tratamiento de los errores que ocurren durante el procesamiento de las solicitudes.
 
-Recibe los errores derivados desde los Controllers o generados por Express y Mongoose, y devuelve respuestas HTTP uniformes.
+Recibe los errores derivados desde los Controllers o generados por Express y Mongoose, devuelve respuestas HTTP uniformes y registra los errores mediante Winston.
 
 ## Estructura del proyecto
 
@@ -93,9 +99,14 @@ src/
 ├── routes/
 ├── services/
 ├── utils/
+│   ├── errors.js
+│   ├── errorDictionary.js
+│   └── logger.js
 ├── app.js
 └── server.js
 ```
+
+Los archivos de registro se generan en la carpeta `logs/`, ubicada en la raíz del proyecto.
 
 ## Requisitos
 
@@ -140,6 +151,8 @@ Para ejecutar el proyecto normalmente:
 ```bash
 npm start
 ```
+
+El nivel de detalle de los registros depende del valor de `NODE_ENV`.
 
 ## Endpoints
 
@@ -198,6 +211,14 @@ Los repartidores se representan mediante usuarios con rol `driver`.
 | POST | `/api/mocks/seed` | Insertar datos simulados en MongoDB |
 
 Los endpoints GET de Mocks generan datos en memoria y no realizan inserciones en la base de datos.
+
+### Logger
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/api/logger-test` | Generar mensajes de prueba de los seis niveles de Winston |
+
+El endpoint `/api/logger-test` está disponible únicamente cuando `NODE_ENV=development`.
 
 ## Seed de datos simulados
 
@@ -350,6 +371,8 @@ También identifica errores provenientes de Express y Mongoose, como JSON mal fo
 
 Si ocurre un error inesperado, devuelve una respuesta genérica con el código `INTERNAL_SERVER_ERROR`, evitando exponer detalles internos del servidor.
 
+Desde el Módulo 4, este middleware también registra los errores mediante Winston.
+
 ### Funcionamiento del manejo de errores
 
 Cuando un Service detecta una condición inválida, lanza un `AppError` utilizando una entrada del diccionario.
@@ -387,7 +410,8 @@ AppError + ErrorDictionary
       ↓
   next(error)
       ↓
- errorMiddleware
+errorMiddleware
+      ├── Registro con Winston
       ↓
  Respuesta HTTP
 ```
@@ -615,6 +639,410 @@ Código HTTP: `400`.
 - Evita exponer detalles técnicos de errores internos.
 - Facilita la incorporación de nuevos errores mediante el diccionario.
 
+
+### Ejemplos cURL para verificar errores
+
+Los siguientes comandos permiten comprobar el manejo centralizado de errores desde una terminal, sin utilizar Postman.
+
+Los ejemplos utilizan `http://localhost:8080` y pueden ejecutarse en Git Bash con el servidor iniciado.
+
+#### 1. Identificador inválido
+
+```bash
+curl -i http://localhost:8080/api/users/123
+```
+
+Resultado esperado:
+- HTTP 400
+- Código `INVALID_ID`
+
+#### 2. JSON mal formado
+
+```bash
+curl -i -X POST http://localhost:8080/api/users \
+  -H "Content-Type: application/json" \
+  -d '{"firstName":"Juan",}'
+```
+
+Resultado esperado:
+- HTTP 400
+- Código `INVALID_JSON`
+
+#### 3. Ruta inexistente
+
+```bash
+curl -i http://localhost:8080/api/ruta-inexistente
+```
+
+Resultado esperado:
+- HTTP 404
+- Código `ROUTE_NOT_FOUND`
+
+#### 4. Cantidad inválida de mocks
+
+```bash
+curl -i "http://localhost:8080/api/mocks/users?qty=500"
+```
+
+Resultado esperado:
+- HTTP 400
+- Código `INVALID_MOCK_QUANTITY`
+
+#### 5. Pedido inexistente
+
+```bash
+curl -i http://localhost:8080/api/orders/000000000000000000000000
+```
+
+Resultado esperado:
+- HTTP 404
+- Código `ORDER_NOT_FOUND`
+
+#### 6. Entrega inexistente
+
+```bash
+curl -i http://localhost:8080/api/deliveries/000000000000000000000000
+```
+
+Resultado esperado:
+- HTTP 404
+- Código `DELIVERY_NOT_FOUND`
+
+#### 7. Seed prohibido en producción
+
+Para comprobar este caso, la aplicación debe ejecutarse con `NODE_ENV=production` y una base de datos de prueba.
+
+```bash
+curl -i -X POST http://localhost:8080/api/mocks/seed \
+  -H "Content-Type: application/json" \
+  -d '{"qty":2}'
+```
+
+Resultado esperado:
+- HTTP 403
+- Código `SEED_FORBIDDEN`
+
+**Importante:** con `NODE_ENV=development`, el endpoint de seed está habilitado y puede insertar documentos en MongoDB. No ejecutar este último comando en desarrollo para probar el error `SEED_FORBIDDEN`.
+
+
+## Logging y monitoreo básico — Módulo 4
+
+En el Módulo 4 se incorporó un sistema de logging centralizado utilizando **Winston**.
+
+Su objetivo es registrar eventos relevantes de la aplicación, facilitar el seguimiento de operaciones y conservar información sobre errores importantes.
+
+El logger está implementado en:
+
+```text
+src/utils/logger.js
+```
+
+Este módulo centraliza la configuración de niveles, formato y destinos de los registros.
+
+### Niveles personalizados de logging
+
+Se definieron seis niveles, ordenados de mayor a menor gravedad:
+
+| Nivel | Prioridad | Descripción |
+|---|---|---|
+| `fatal` | 0 | Fallos críticos que impiden el funcionamiento normal |
+| `error` | 1 | Errores inesperados que requieren investigación |
+| `warning` | 2 | Errores controlados y situaciones recuperables |
+| `info` | 3 | Eventos importantes del funcionamiento de la API |
+| `http` | 4 | Información relacionada con solicitudes HTTP |
+| `debug` | 5 | Información detallada para desarrollo y diagnóstico |
+
+La prioridad más baja numéricamente representa una mayor gravedad.
+
+### Formato de los registros
+
+Cada mensaje incluye:
+
+- Fecha.
+- Hora.
+- Nivel de logging.
+- Descripción del evento.
+
+Ejemplo:
+
+```text
+2026-10-26 15:18:36 [info] Pedido creado correctamente con ID: 6adf997c3a3edf8506725757
+```
+
+### Configuración por entorno
+
+La configuración del logger depende de la variable `NODE_ENV`.
+
+**Desarrollo (`NODE_ENV=development`)**
+
+Se muestran en consola los seis niveles:
+
+```text
+debug
+http
+info
+warning
+error
+fatal
+```
+
+**Producción (`NODE_ENV=production`)**
+
+Se muestran en consola únicamente:
+
+```text
+info
+warning
+error
+fatal
+```
+
+Esto permite disponer de información detallada durante el desarrollo y reducir los mensajes menos relevantes en producción.
+
+### Destinos de los registros
+
+Winston utiliza dos transportes principales.
+
+**1. Consola**
+
+Los mensajes se muestran en la terminal mediante `winston.transports.Console()`.
+
+La cantidad de información visible depende del entorno.
+
+**2. Archivos**
+
+Los registros importantes se almacenan mediante `winston-daily-rotate-file`.
+
+Los archivos se generan dentro de la carpeta:
+
+```text
+logs/
+```
+
+Con nombres como:
+
+```text
+error-2026-10-26.log
+```
+
+Solamente se almacenan los niveles:
+
+```text
+error
+fatal
+```
+
+Los mensajes `debug`, `http`, `info` y `warning` no se guardan en estos archivos.
+
+### Rotación de archivos
+
+La configuración utiliza los siguientes parámetros:
+
+| Parámetro | Configuración |
+|---|---|
+| Patrón de fecha | `YYYY-MM-DD` |
+| Tamaño máximo por archivo | 10 MB |
+| Retención | 14 días |
+| Niveles almacenados | `error` y `fatal` |
+
+La rotación permite evitar que los archivos crezcan indefinidamente.
+
+La librería también genera un archivo de auditoría para administrar la retención de registros.
+
+La carpeta `logs/` se encuentra excluida del repositorio mediante `.gitignore`:
+
+```gitignore
+/logs/
+```
+
+De esta manera, los registros generados durante la ejecución no se suben a GitHub.
+
+### Integración con el middleware global de errores
+
+El middleware `src/middlewares/error.middleware.js` utiliza Winston para registrar los errores antes de enviar la respuesta HTTP.
+
+Los errores controlados mediante `AppError` se registran como `warning`.
+
+Ejemplo:
+
+```text
+[warning] GET /api/ruta-inexistente - ROUTE_NOT_FOUND: Ruta no encontrada
+```
+
+Los errores inesperados se registran como `error`, incluyendo información técnica para facilitar su investigación.
+
+Ejemplo:
+
+```text
+[error] GET /api/orders - Error inesperado: TypeError...
+```
+
+Los fallos críticos de conexión inicial a MongoDB se registran como `fatal`.
+
+Ejemplo:
+
+```text
+[fatal] No se pudo conectar a MongoDB
+```
+
+La incorporación del logger no modifica los códigos HTTP ni la estructura de las respuestas JSON.
+
+### Eventos registrados
+
+Se incorporaron registros en diferentes puntos importantes de ShipNow.
+
+**Inicio del servidor**
+
+Se registra mediante `info` cuando Express comienza a escuchar solicitudes.
+
+**Conexión con MongoDB**
+
+Se utiliza `info` para conexiones exitosas y `fatal` para fallos críticos durante el inicio.
+
+**Generación de mocks**
+
+Se utiliza `info` cuando se solicita generar usuarios, repartidores, pedidos o entregas simuladas.
+
+**Cantidades inválidas**
+
+Se utiliza `warning` cuando se solicita una cantidad fuera del rango permitido.
+
+**Creación de pedidos**
+
+Se utiliza `info` después de guardar correctamente un pedido en MongoDB, incluyendo su identificador.
+
+**Proceso de Seed**
+
+Se utiliza `info` para registrar el inicio y la finalización exitosa del proceso, incluyendo un resumen de los documentos insertados.
+
+**Errores de la API**
+
+El middleware global registra los errores controlados como `warning` y los inesperados como `error`.
+
+### Endpoint de prueba del logger
+
+Se incorporó el siguiente endpoint:
+
+```http
+GET /api/logger-test
+```
+
+Este endpoint está disponible solamente cuando:
+
+```env
+NODE_ENV=development
+```
+
+Al ejecutarlo, se genera un mensaje de prueba para cada uno de los seis niveles:
+
+```javascript
+logger.debug("Prueba de nivel debug");
+logger.http("Prueba de nivel http");
+logger.info("Prueba de nivel info");
+logger.warning("Prueba de nivel warning");
+logger.error("Prueba de nivel error");
+logger.fatal("Prueba de nivel fatal");
+```
+
+Respuesta esperada:
+
+```json
+{
+  "status": "success",
+  "message": "Prueba de logging ejecutada correctamente"
+}
+```
+
+En desarrollo, los seis mensajes aparecen en consola.
+
+Los mensajes de nivel `error` y `fatal` también se guardan en el archivo de errores correspondiente.
+
+Los mensajes generados por este endpoint son simulaciones y no representan fallos reales de la aplicación.
+
+### Pruebas realizadas
+
+Se realizaron pruebas utilizando Postman y la terminal de VS Code.
+
+**1. Inicio del servidor**
+
+Se verificó que Winston registre correctamente la conexión a MongoDB y el inicio de Express.
+
+**2. Ruta inexistente**
+
+```http
+GET /api/ruta-inexistente
+```
+
+Se verificó que la API mantenga su respuesta HTTP `404` y que Winston registre el evento como `warning`.
+
+**3. Endpoint de prueba**
+
+```http
+GET /api/logger-test
+```
+
+Se verificó que aparezcan los seis niveles en consola y que solamente `error` y `fatal` se almacenen en el archivo de errores.
+
+**4. Generación de usuarios mock**
+
+```http
+GET /api/mocks/users?qty=10
+```
+
+Se verificó el registro:
+
+```text
+[info] Generando 10 usuarios mock
+```
+
+**5. Cantidad inválida de mocks**
+
+```http
+GET /api/mocks/users?qty=500
+```
+
+Se verificó que la API devuelva `INVALID_MOCK_QUANTITY` y que Winston registre el evento como `warning`.
+
+**6. Creación de pedido**
+
+```http
+POST /api/orders
+```
+
+Se verificó que la creación exitosa devuelva HTTP `201` y que Winston registre el ID del pedido creado.
+
+**7. Ejecución del Seed**
+
+```http
+POST /api/mocks/seed
+```
+
+Body:
+
+```json
+{
+  "qty": 2
+}
+```
+
+Se verificó que el proceso inserte correctamente los datos y registre:
+
+```text
+[info] Iniciando seed de ShipNow con cantidad: 2
+[info] Seed completado correctamente: 2 clientes, 2 repartidores, 2 pedidos y 2 entregas
+```
+
+### Beneficios del logging
+
+- Centraliza el registro de eventos.
+- Reemplaza los mensajes dispersos de consola.
+- Permite distinguir eventos según su gravedad.
+- Facilita el diagnóstico de errores inesperados.
+- Conserva los registros importantes en archivos.
+- Evita acumular archivos indefinidamente mediante rotación.
+- Permite configurar distintos niveles de detalle según el entorno.
+- Se integra con el manejo de errores existente sin alterar las respuestas HTTP.
+
 ## Scripts
 
 | Comando | Uso |
@@ -625,4 +1053,5 @@ Código HTTP: `400`.
 ## Información de la entrega
 
 **Curso:** Backend III  
-**Entrega:** Pre-entrega Módulo 3 — Manejo profesional de errores de ShipNow
+**Proyecto:** ShipNow API  
+**Entrega:** Pre-entrega Módulo 4 — Logging y monitoreo básico
