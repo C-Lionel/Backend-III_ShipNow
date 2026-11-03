@@ -12,6 +12,15 @@ const levels = {
   debug: 5
 };
 
+winston.addColors({
+  fatal: "red bold",
+  error: "red",
+  warning: "yellow",
+  info: "green",
+  http: "cyan",
+  debug: "magenta"
+});
+
 // Formato de los mensajes
 const logFormat = winston.format.printf(
   ({ timestamp, level, message }) => {
@@ -29,7 +38,13 @@ const logger = winston.createLogger({
   ),
   transports: [
     // Mostrar logs en consola
-    new winston.transports.Console(),
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
+        winston.format.colorize({ level: true }),
+        logFormat
+      )
+    }),
 
     // Guardar errores en archivos con rotación
     new winston.transports.DailyRotateFile({
