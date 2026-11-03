@@ -1,3 +1,4 @@
+
 import User from "../models/user.model.js";
 
 class UsersRepository {
@@ -14,16 +15,19 @@ class UsersRepository {
   }
 
   async create(user) {
-  const newUser = await User.create(user);
+    const newUser = await User.create(user);
 
-  return User.findById(newUser._id).select("-password");
-}
+    return User.findById(newUser._id).select("-password");
+  }
 
   async update(id, updatedUser) {
     return User.findByIdAndUpdate(
       id,
       updatedUser,
-      { new: true }
+      {
+        new: true,
+        runValidators: true
+      }
     ).select("-password");
   }
 

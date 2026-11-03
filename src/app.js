@@ -14,6 +14,9 @@ import { ErrorDictionary } from './utils/errorDictionary.js';
 
 import logger from './utils/logger.js';
 
+import swaggerUi from 'swagger-ui-express';
+import swaggerSpecs from './config/swagger.config.js';
+
 
 
 const app = express();
@@ -21,6 +24,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Swagger
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
 
 // Rutas de la API
 app.use('/api/users', usersRouter);

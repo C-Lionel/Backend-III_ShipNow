@@ -1,0 +1,250 @@
+
+paths:
+  /api/orders:
+    get:
+      tags: [Orders]
+      summary: Obtener todos los pedidos
+      description: Devuelve la lista de pedidos registrados.
+      responses:
+        "200":
+          description: Pedidos obtenidos correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  payload:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Order"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      tags: [Orders]
+      summary: Crear pedido
+      description: >
+        Crea un pedido para un usuario con rol customer.
+        Calcula el total de los ítems y agrega un costo de envío fijo de 10.
+        El estado inicial es created y la prioridad predeterminada es normal.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - customer
+                - items
+                - deliveryAddress
+              properties:
+                customer:
+                  type: string
+                  description: ID de un usuario con rol customer
+                  example: "671a2b3c4d5e6f7890123456"
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    $ref: "#/components/schemas/OrderItem"
+                deliveryAddress:
+                  type: string
+                  example: Av. Siempre Viva 742
+                declaredValue:
+                  type: number
+                  description: Si se omite, se utiliza la suma de los ítems.
+                  example: 3000
+                priority:
+                  type: string
+                  enum: [low, normal, high]
+                  default: normal
+                  example: normal
+      responses:
+        "201":
+          description: Pedido creado correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  payload:
+                    $ref: "#/components/schemas/Order"
+        "400":
+          description: >
+            Datos inválidos, cliente inexistente (ORDER_CUSTOMER_NOT_FOUND),
+            rol de cliente inválido (INVALID_CUSTOMER_ROLE)
+            o lista de ítems vacía (ORDER_ITEMS_REQUIRED).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/orders/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Identificador MongoDB del pedido
+        schema:
+          type: string
+          example: "671a2b3c4d5e6f7890123457"
+
+    get:
+      tags: [Orders]
+      summary: Obtener pedido por ID
+      responses:
+        "200":
+          description: Pedido encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  payload:
+                    $ref: "#/components/schemas/Order"
+        "400":
+          description: Identificador inválido (INVALID_ID)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Pedido inexistente (ORDER_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    put:
+      tags: [Orders]
+      summary: Actualizar pedido
+      description: >
+        Permite actualizar el estado y la prioridad de un pedido.
+        No permite modificar customer, items, total, shippingCost,
+        declaredValue ni delivery.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - created
+                    - assigned
+                    - picked_up
+                    - in_transit
+                    - delivered
+                    - cancelled
+                  example: in_transit
+                priority:
+                  type: string
+                  enum: [low, normal, high]
+                  example: high
+      responses:
+        "200":
+          description: Pedido actualizado correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  payload:
+                    $ref: "#/components/schemas/Order"
+        "400":
+          description: Identificador o datos inválidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: No se permite modificar campos protegidos (ORDER_PROTECTED_FIELDS)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Pedido inexistente (ORDER_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags: [Orders]
+      summary: Eliminar pedido
+      description: >
+        Elimina un pedido solamente si no tiene una entrega asociada.
+      responses:
+        "200":
+          description: Pedido eliminado correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  payload:
+                    $ref: "#/components/schemas/Order"
+        "400":
+          description: Identificador inválido (INVALID_ID)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Pedido inexistente (ORDER_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: El pedido tiene una entrega asociada (ORDER_HAS_DELIVERY)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

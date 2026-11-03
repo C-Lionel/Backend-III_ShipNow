@@ -1,0 +1,248 @@
+
+paths:
+  /api/deliveries:
+    get:
+      tags: [Deliveries]
+      summary: Obtener todas las entregas
+      description: Devuelve la lista de entregas registradas.
+      responses:
+        "200":
+          description: Entregas obtenidas correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  payload:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Delivery"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      tags: [Deliveries]
+      summary: Crear entrega
+      description: >
+        Crea una entrega asociada a un pedido existente.
+        No permite más de una entrega por pedido.
+        Si se indica un repartidor válido, la entrega comienza
+        con estado assigned; de lo contrario, comienza como pending.
+        También vincula la nueva entrega con el pedido.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - order
+              properties:
+                order:
+                  type: string
+                  description: ID del pedido asociado
+                  example: "671a2b3c4d5e6f7890123457"
+                driver:
+                  type: string
+                  nullable: true
+                  description: ID de un usuario con rol driver
+                  example: null
+                priority:
+                  type: string
+                  enum: [low, normal, high]
+                  default: normal
+                  example: normal
+      responses:
+        "201":
+          description: Entrega creada correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  payload:
+                    $ref: "#/components/schemas/Delivery"
+        "400":
+          description: >
+            Datos inválidos, ID de pedido inválido (INVALID_ORDER_ID),
+            ID de repartidor inválido (INVALID_DRIVER_ID)
+            o repartidor no válido (INVALID_DRIVER).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Pedido inexistente (ORDER_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Ya existe una entrega para ese pedido (DELIVERY_ALREADY_EXISTS)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/deliveries/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Identificador MongoDB de la entrega
+        schema:
+          type: string
+          example: "671a2b3c4d5e6f7890123458"
+
+    get:
+      tags: [Deliveries]
+      summary: Obtener entrega por ID
+      responses:
+        "200":
+          description: Entrega encontrada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  payload:
+                    $ref: "#/components/schemas/Delivery"
+        "400":
+          description: ID inválido (INVALID_DELIVERY_ID)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Entrega inexistente (DELIVERY_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    put:
+      tags: [Deliveries]
+      summary: Actualizar entrega
+      description: >
+        Permite actualizar el repartidor, estado y prioridad
+        de una entrega. No permite modificar el pedido asociado.
+        Si se indica un repartidor, debe existir y tener rol driver.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                driver:
+                  type: string
+                  nullable: true
+                  description: ID de un usuario con rol driver, o null para quitarlo
+                  example: "671a2b3c4d5e6f7890123459"
+                status:
+                  type: string
+                  enum: [pending, assigned, in_transit, delivered]
+                  example: in_transit
+                priority:
+                  type: string
+                  enum: [low, normal, high]
+                  example: high
+      responses:
+        "200":
+          description: Entrega actualizada correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  payload:
+                    $ref: "#/components/schemas/Delivery"
+        "400":
+          description: >
+            ID de entrega inválido (INVALID_DELIVERY_ID),
+            ID de repartidor inválido (INVALID_DRIVER_ID),
+            repartidor no válido (INVALID_DRIVER),
+            cambio de pedido prohibido (DELIVERY_ORDER_CHANGE_FORBIDDEN)
+            o datos inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Entrega inexistente (DELIVERY_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags: [Deliveries]
+      summary: Eliminar entrega
+      description: >
+        Elimina una entrega y desvincula su referencia
+        del pedido asociado.
+      responses:
+        "200":
+          description: Entrega eliminada correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  payload:
+                    $ref: "#/components/schemas/Delivery"
+        "400":
+          description: ID inválido (INVALID_DELIVERY_ID)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Entrega inexistente (DELIVERY_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

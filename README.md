@@ -5,11 +5,13 @@ API backend de ShipNow desarrollada con Node.js, Express y MongoDB.
 
 El proyecto utiliza una arquitectura por capas para separar las responsabilidades de acceso HTTP, lógica de negocio y persistencia de datos.
 
-En el Módulo 2 se incorporó la gestión de pedidos y entregas, junto con un sistema de generación de datos simulados (Mocks) y un proceso de carga de datos de prueba (Seed).
+A lo largo de las preentregas se incorporaron las siguientes funcionalidades:
 
-En el Módulo 3 se implementó un sistema de manejo centralizado de errores mediante errores personalizados, un diccionario de errores y un middleware global de Express. Esto permite devolver respuestas HTTP consistentes y separar la detección de errores de su presentación al cliente.
-
-En el Módulo 4 se incorporó un sistema de logging centralizado con Winston para registrar eventos importantes, monitorear errores y conservar registros críticos mediante archivos con rotación automática.
+- **Módulo 1:** Gestión de usuarios y estructura inicial del proyecto.
+- **Módulo 2:** Gestión de pedidos, entregas, generación de Mocks y carga de datos mediante Seed.
+- **Módulo 3:** Manejo centralizado de errores mediante `AppError`, `ErrorDictionary` y un middleware global.
+- **Módulo 4:** Logging centralizado con Winston y rotación automática de archivos.
+- **Módulo 5:** Documentación interactiva de la API mediante Swagger UI y OpenAPI 3.0.0.
 
 ## Tecnologías
 
@@ -22,6 +24,10 @@ En el Módulo 4 se incorporó un sistema de logging centralizado con Winston par
 - bcryptjs
 - Winston
 - winston-daily-rotate-file
+- swagger-jsdoc
+- swagger-ui-express
+- YAML
+- OpenAPI 3.0.0
 
 ## Arquitectura
 
@@ -90,8 +96,16 @@ Recibe los errores derivados desde los Controllers o generados por Express y Mon
 ```text
 src/
 ├── config/
+│   └── swagger.config.js
 ├── constants/
 ├── controllers/
+├── docs/
+│   ├── schemas.yaml
+│   ├── users.yaml
+│   ├── orders.yaml
+│   ├── deliveries.yaml
+│   ├── mocks.yaml
+│   └── logger.yaml
 ├── middlewares/
 ├── mocks/
 ├── models/
@@ -110,17 +124,24 @@ Los archivos de registro se generan en la carpeta `logs/`, ubicada en la raíz d
 
 ## Requisitos
 
-- Node.js 18 o superior
-- MongoDB local o MongoDB Atlas
-- npm
+- Node.js 18 o superior.
+- MongoDB local o MongoDB Atlas.
+- npm.
 
 Para utilizar el proceso de Seed con transacciones, MongoDB debe admitir transacciones, por ejemplo mediante un replica set o un clúster compatible de MongoDB Atlas.
 
 ## Instalación
 
-Clonar el repositorio e instalar las dependencias:
+Clonar el repositorio:
 
 ```bash
+git clone https://github.com/C-Lionel/Backend-III_ShipNow.git
+```
+
+Ingresar al proyecto e instalar las dependencias:
+
+```bash
+cd Backend-III_ShipNow
 npm install
 ```
 
@@ -134,7 +155,7 @@ MONGODB_URI=mongodb+srv://usuario:password@cluster.mongodb.net/shipnow
 NODE_ENV=development
 ```
 
-Las variables `PORT`, `MONGODB_URI` y `NODE_ENV` son necesarias para configurar la aplicación.
+Las variables `PORT`, `MONGODB_URI` y `NODE_ENV` permiten configurar la aplicación.
 
 El archivo `.env` no debe subirse al repositorio porque puede contener información sensible.
 
@@ -150,6 +171,12 @@ Para ejecutar el proyecto normalmente:
 
 ```bash
 npm start
+```
+
+Una vez iniciado el servidor, la API queda disponible en:
+
+```text
+http://localhost:8080
 ```
 
 El nivel de detalle de los registros depende del valor de `NODE_ENV`.
@@ -172,7 +199,9 @@ El nivel de detalle de los registros depende del valor de `NODE_ENV`.
 | PUT | `/api/users/:id` | Actualizar un usuario |
 | DELETE | `/api/users/:id` | Eliminar un usuario |
 
-El registro público permite crear usuarios con rol `customer`. Las contraseñas se almacenan utilizando bcrypt y se excluyen de las respuestas de consulta.
+El registro público permite crear usuarios con rol `customer`.
+
+Las contraseñas se almacenan utilizando bcrypt y se excluyen de las respuestas de consulta.
 
 ### Pedidos
 
@@ -185,6 +214,10 @@ El registro público permite crear usuarios con rol `customer`. Las contraseñas
 | DELETE | `/api/orders/:id` | Eliminar un pedido |
 
 Cada pedido se relaciona con un usuario de rol `customer` y puede estar asociado a una entrega.
+
+La creación de pedidos valida la existencia del cliente, sus permisos y los ítems enviados.
+
+El total se calcula a partir de los ítems y el costo de envío.
 
 ### Entregas
 
@@ -199,6 +232,8 @@ Cada pedido se relaciona con un usuario de rol `customer` y puede estar asociado
 Cada entrega está asociada a un pedido y puede tener un repartidor asignado.
 
 Los repartidores se representan mediante usuarios con rol `driver`.
+
+No se permite crear más de una entrega para el mismo pedido.
 
 ### Mocks
 
@@ -261,8 +296,8 @@ Las operaciones se ejecutan dentro de una transacción de MongoDB para evitar in
 
 - Solo se permite cuando `NODE_ENV=development`.
 - La cantidad debe ser un número entero entre 1 y 100.
-- Si se solicita una cantidad inválida, la API devuelve un error `400`.
-- Si se intenta ejecutar fuera del entorno de desarrollo, devuelve un error `403`.
+- Si se solicita una cantidad inválida, la API devuelve un error HTTP `400`.
+- Si se intenta ejecutar fuera del entorno de desarrollo, devuelve un error HTTP `403`.
 
 **Importante:** el endpoint de Seed modifica la base de datos. Debe utilizarse únicamente en un entorno de desarrollo controlado.
 
@@ -299,7 +334,7 @@ in_transit
 delivered
 ```
 
-### Prioridades de entrega
+### Prioridades
 
 ```text
 low
@@ -334,8 +369,6 @@ La API implementa un sistema de manejo centralizado de errores para mantener res
 Este sistema permite identificar los errores mediante códigos específicos y devolver mensajes claros al cliente.
 
 ### Componentes del sistema
-
-El manejo de errores se organiza en tres archivos principales:
 
 **1. AppError — `src/utils/errors.js`**
 
@@ -393,8 +426,6 @@ catch (error) {
 
 Finalmente, el middleware global interpreta el error y devuelve la respuesta HTTP correspondiente.
 
-El flujo general es:
-
 ```text
 Solicitud HTTP
       ↓
@@ -408,12 +439,12 @@ Detección del error
       ↓
 AppError + ErrorDictionary
       ↓
-  next(error)
+ next(error)
       ↓
 errorMiddleware
       ├── Registro con Winston
       ↓
- Respuesta HTTP
+Respuesta HTTP
 ```
 
 Los errores originados directamente en Express o Mongoose también pueden llegar al middleware global.
@@ -439,8 +470,6 @@ Donde:
 El código de estado HTTP se establece en la respuesta y no se incluye como propiedad del JSON.
 
 ### Diccionario de errores
-
-La aplicación contempla errores relacionados con usuarios, pedidos, entregas, mocks y validaciones generales.
 
 | Código | HTTP | Descripción |
 |---|---|---|
@@ -470,166 +499,70 @@ La aplicación contempla errores relacionados con usuarios, pedidos, entregas, m
 | `ROUTE_NOT_FOUND` | 404 | Ruta inexistente |
 | `INTERNAL_SERVER_ERROR` | 500 | Error inesperado del servidor |
 
-### Pruebas del manejo de errores con Postman
+### Pruebas del manejo de errores
 
-Se realizaron pruebas sobre los endpoints existentes para verificar que los errores se procesen mediante el middleware global.
+Se realizaron pruebas con Postman y la terminal para verificar que el middleware global procese correctamente los errores.
 
-**1. Usuario inexistente**
+| Prueba | Resultado esperado |
+|---|---|
+| Usuario inexistente | 404 — `USER_NOT_FOUND` |
+| Identificador inválido | 400 — `INVALID_ID` |
+| Email duplicado | 409 — `EMAIL_ALREADY_EXISTS` |
+| Rol no permitido | 403 — `USER_ROLE_FORBIDDEN` |
+| Pedido inexistente | 404 — `ORDER_NOT_FOUND` |
+| Pedido sin ítems | 400 — `ORDER_ITEMS_REQUIRED` |
+| Entrega inexistente | 404 — `DELIVERY_NOT_FOUND` |
+| Cantidad inválida de mocks | 400 — `INVALID_MOCK_QUANTITY` |
+| Cantidad inválida en Seed | 400 — `INVALID_MOCK_QUANTITY` |
+| Ruta inexistente | 404 — `ROUTE_NOT_FOUND` |
+| JSON mal formado | 400 — `INVALID_JSON` |
+| Validación de Mongoose | 400 — `VALIDATION_ERROR` |
 
-```http
-GET /api/users/000000000000000000000000
+### Ejemplos cURL para verificar errores
+
+Los siguientes comandos pueden ejecutarse desde Git Bash con el servidor iniciado.
+
+**Identificador inválido**
+
+```bash
+curl -i http://localhost:8080/api/users/123
 ```
 
-Respuesta esperada:
+Resultado esperado: HTTP `400`, código `INVALID_ID`.
 
-- HTTP `404`
-- Código `USER_NOT_FOUND`
+**Ruta inexistente**
 
-**2. Identificador inválido**
-
-```http
-GET /api/users/123
+```bash
+curl -i http://localhost:8080/api/ruta-inexistente
 ```
 
-Respuesta esperada:
+Resultado esperado: HTTP `404`, código `ROUTE_NOT_FOUND`.
 
-- HTTP `400`
-- Código `INVALID_ID`
+**Cantidad inválida de mocks**
 
-**3. Email duplicado**
-
-Enviar una solicitud `POST /api/users` utilizando un email que ya exista en MongoDB.
-
-Respuesta esperada:
-
-- HTTP `409`
-- Código `EMAIL_ALREADY_EXISTS`
-
-**4. Rol no permitido**
-
-```http
-POST /api/users
+```bash
+curl -i "http://localhost:8080/api/mocks/users?qty=500"
 ```
 
-Enviar un usuario con rol `admin` desde el registro público.
+Resultado esperado: HTTP `400`, código `INVALID_MOCK_QUANTITY`.
 
-Respuesta esperada:
+**Pedido inexistente**
 
-- HTTP `403`
-- Código `USER_ROLE_FORBIDDEN`
-
-**5. Pedido inexistente**
-
-```http
-GET /api/orders/000000000000000000000000
+```bash
+curl -i http://localhost:8080/api/orders/000000000000000000000000
 ```
 
-Respuesta esperada:
+Resultado esperado: HTTP `404`, código `ORDER_NOT_FOUND`.
 
-- HTTP `404`
-- Código `ORDER_NOT_FOUND`
+**Entrega inexistente**
 
-**6. Pedido sin ítems**
-
-Enviar una solicitud `POST /api/orders` con un cliente válido y un arreglo `items` vacío.
-
-Respuesta esperada:
-
-- HTTP `400`
-- Código `ORDER_ITEMS_REQUIRED`
-
-**7. Entrega inexistente**
-
-```http
-GET /api/deliveries/000000000000000000000000
+```bash
+curl -i http://localhost:8080/api/deliveries/000000000000000000000000
 ```
 
-Respuesta esperada:
+Resultado esperado: HTTP `404`, código `DELIVERY_NOT_FOUND`.
 
-- HTTP `404`
-- Código `DELIVERY_NOT_FOUND`
-
-**8. Cantidad inválida de mocks**
-
-```http
-GET /api/mocks/users?qty=-5
-```
-
-Respuesta esperada:
-
-- HTTP `400`
-- Código `INVALID_MOCK_QUANTITY`
-
-**9. Cantidad inválida en Seed**
-
-```http
-POST /api/mocks/seed
-```
-
-Body:
-
-```json
-{
-  "qty": -5
-}
-```
-
-Respuesta esperada:
-
-- HTTP `400`
-- Código `INVALID_MOCK_QUANTITY`
-
-**10. Ruta inexistente**
-
-```http
-GET /api/ruta-inexistente
-```
-
-Respuesta esperada:
-
-```json
-{
-  "status": "error",
-  "message": "Ruta no encontrada",
-  "code": "ROUTE_NOT_FOUND"
-}
-```
-
-Código HTTP: `404`.
-
-**11. JSON mal formado**
-
-Enviar una solicitud `POST /api/users` con un JSON que contenga una coma sobrante antes del cierre del objeto.
-
-Respuesta esperada:
-
-```json
-{
-  "status": "error",
-  "message": "JSON no válido",
-  "code": "INVALID_JSON"
-}
-```
-
-Código HTTP: `400`.
-
-**12. Error de validación de Mongoose**
-
-Enviar una solicitud `POST /api/users` sin el campo obligatorio `email`.
-
-Respuesta esperada:
-
-```json
-{
-  "status": "error",
-  "message": "Los datos proporcionados no son válidos",
-  "code": "VALIDATION_ERROR"
-}
-```
-
-Código HTTP: `400`.
-
-### Beneficios de la implementación
+### Beneficios del manejo centralizado de errores
 
 - Centraliza los mensajes y códigos de error.
 - Evita duplicar respuestas de error en los Controllers.
@@ -638,92 +571,6 @@ Código HTTP: `400`.
 - Permite diferenciar errores de negocio, validación y errores inesperados.
 - Evita exponer detalles técnicos de errores internos.
 - Facilita la incorporación de nuevos errores mediante el diccionario.
-
-
-### Ejemplos cURL para verificar errores
-
-Los siguientes comandos permiten comprobar el manejo centralizado de errores desde una terminal, sin utilizar Postman.
-
-Los ejemplos utilizan `http://localhost:8080` y pueden ejecutarse en Git Bash con el servidor iniciado.
-
-#### 1. Identificador inválido
-
-```bash
-curl -i http://localhost:8080/api/users/123
-```
-
-Resultado esperado:
-- HTTP 400
-- Código `INVALID_ID`
-
-#### 2. JSON mal formado
-
-```bash
-curl -i -X POST http://localhost:8080/api/users \
-  -H "Content-Type: application/json" \
-  -d '{"firstName":"Juan",}'
-```
-
-Resultado esperado:
-- HTTP 400
-- Código `INVALID_JSON`
-
-#### 3. Ruta inexistente
-
-```bash
-curl -i http://localhost:8080/api/ruta-inexistente
-```
-
-Resultado esperado:
-- HTTP 404
-- Código `ROUTE_NOT_FOUND`
-
-#### 4. Cantidad inválida de mocks
-
-```bash
-curl -i "http://localhost:8080/api/mocks/users?qty=500"
-```
-
-Resultado esperado:
-- HTTP 400
-- Código `INVALID_MOCK_QUANTITY`
-
-#### 5. Pedido inexistente
-
-```bash
-curl -i http://localhost:8080/api/orders/000000000000000000000000
-```
-
-Resultado esperado:
-- HTTP 404
-- Código `ORDER_NOT_FOUND`
-
-#### 6. Entrega inexistente
-
-```bash
-curl -i http://localhost:8080/api/deliveries/000000000000000000000000
-```
-
-Resultado esperado:
-- HTTP 404
-- Código `DELIVERY_NOT_FOUND`
-
-#### 7. Seed prohibido en producción
-
-Para comprobar este caso, la aplicación debe ejecutarse con `NODE_ENV=production` y una base de datos de prueba.
-
-```bash
-curl -i -X POST http://localhost:8080/api/mocks/seed \
-  -H "Content-Type: application/json" \
-  -d '{"qty":2}'
-```
-
-Resultado esperado:
-- HTTP 403
-- Código `SEED_FORBIDDEN`
-
-**Importante:** con `NODE_ENV=development`, el endpoint de seed está habilitado y puede insertar documentos en MongoDB. No ejecutar este último comando en desarrollo para probar el error `SEED_FORBIDDEN`.
-
 
 ## Logging y monitoreo básico — Módulo 4
 
@@ -855,69 +702,29 @@ La carpeta `logs/` se encuentra excluida del repositorio mediante `.gitignore`:
 /logs/
 ```
 
-De esta manera, los registros generados durante la ejecución no se suben a GitHub.
-
 ### Integración con el middleware global de errores
 
 El middleware `src/middlewares/error.middleware.js` utiliza Winston para registrar los errores antes de enviar la respuesta HTTP.
 
 Los errores controlados mediante `AppError` se registran como `warning`.
 
-Ejemplo:
-
-```text
-[warning] GET /api/ruta-inexistente - ROUTE_NOT_FOUND: Ruta no encontrada
-```
-
 Los errores inesperados se registran como `error`, incluyendo información técnica para facilitar su investigación.
 
-Ejemplo:
-
-```text
-[error] GET /api/orders - Error inesperado: TypeError...
-```
-
 Los fallos críticos de conexión inicial a MongoDB se registran como `fatal`.
-
-Ejemplo:
-
-```text
-[fatal] No se pudo conectar a MongoDB
-```
 
 La incorporación del logger no modifica los códigos HTTP ni la estructura de las respuestas JSON.
 
 ### Eventos registrados
 
-Se incorporaron registros en diferentes puntos importantes de ShipNow.
+Se incorporaron registros en diferentes puntos importantes de ShipNow:
 
-**Inicio del servidor**
-
-Se registra mediante `info` cuando Express comienza a escuchar solicitudes.
-
-**Conexión con MongoDB**
-
-Se utiliza `info` para conexiones exitosas y `fatal` para fallos críticos durante el inicio.
-
-**Generación de mocks**
-
-Se utiliza `info` cuando se solicita generar usuarios, repartidores, pedidos o entregas simuladas.
-
-**Cantidades inválidas**
-
-Se utiliza `warning` cuando se solicita una cantidad fuera del rango permitido.
-
-**Creación de pedidos**
-
-Se utiliza `info` después de guardar correctamente un pedido en MongoDB, incluyendo su identificador.
-
-**Proceso de Seed**
-
-Se utiliza `info` para registrar el inicio y la finalización exitosa del proceso, incluyendo un resumen de los documentos insertados.
-
-**Errores de la API**
-
-El middleware global registra los errores controlados como `warning` y los inesperados como `error`.
+- Inicio del servidor.
+- Conexión con MongoDB.
+- Generación de Mocks.
+- Cantidades inválidas.
+- Creación de pedidos.
+- Inicio y finalización del Seed.
+- Errores controlados e inesperados de la API.
 
 ### Endpoint de prueba del logger
 
@@ -959,79 +766,6 @@ Los mensajes de nivel `error` y `fatal` también se guardan en el archivo de err
 
 Los mensajes generados por este endpoint son simulaciones y no representan fallos reales de la aplicación.
 
-### Pruebas realizadas
-
-Se realizaron pruebas utilizando Postman y la terminal de VS Code.
-
-**1. Inicio del servidor**
-
-Se verificó que Winston registre correctamente la conexión a MongoDB y el inicio de Express.
-
-**2. Ruta inexistente**
-
-```http
-GET /api/ruta-inexistente
-```
-
-Se verificó que la API mantenga su respuesta HTTP `404` y que Winston registre el evento como `warning`.
-
-**3. Endpoint de prueba**
-
-```http
-GET /api/logger-test
-```
-
-Se verificó que aparezcan los seis niveles en consola y que solamente `error` y `fatal` se almacenen en el archivo de errores.
-
-**4. Generación de usuarios mock**
-
-```http
-GET /api/mocks/users?qty=10
-```
-
-Se verificó el registro:
-
-```text
-[info] Generando 10 usuarios mock
-```
-
-**5. Cantidad inválida de mocks**
-
-```http
-GET /api/mocks/users?qty=500
-```
-
-Se verificó que la API devuelva `INVALID_MOCK_QUANTITY` y que Winston registre el evento como `warning`.
-
-**6. Creación de pedido**
-
-```http
-POST /api/orders
-```
-
-Se verificó que la creación exitosa devuelva HTTP `201` y que Winston registre el ID del pedido creado.
-
-**7. Ejecución del Seed**
-
-```http
-POST /api/mocks/seed
-```
-
-Body:
-
-```json
-{
-  "qty": 2
-}
-```
-
-Se verificó que el proceso inserte correctamente los datos y registre:
-
-```text
-[info] Iniciando seed de ShipNow con cantidad: 2
-[info] Seed completado correctamente: 2 clientes, 2 repartidores, 2 pedidos y 2 entregas
-```
-
 ### Beneficios del logging
 
 - Centraliza el registro de eventos.
@@ -1043,15 +777,533 @@ Se verificó que el proceso inserte correctamente los datos y registre:
 - Permite configurar distintos niveles de detalle según el entorno.
 - Se integra con el manejo de errores existente sin alterar las respuestas HTTP.
 
+## Documentación con Swagger y OpenAPI — Módulo 5
+
+En el Módulo 5 se incorporó documentación interactiva de la API utilizando **Swagger UI**, **swagger-jsdoc** y la especificación **OpenAPI 3.0.0**.
+
+El objetivo es describir los endpoints de ShipNow, sus parámetros, cuerpos de solicitud, respuestas HTTP y estructuras de datos.
+
+La documentación permite consultar y probar las operaciones desde un navegador, sin necesidad de utilizar Postman para cada petición.
+
+### Dependencias utilizadas
+
+Se instalaron las siguientes dependencias:
+
+```bash
+npm install swagger-jsdoc swagger-ui-express
+```
+
+- `swagger-jsdoc`: genera la especificación OpenAPI a partir de los archivos de documentación.
+- `swagger-ui-express`: publica una interfaz gráfica interactiva dentro de Express.
+
+### Configuración de Swagger
+
+La configuración se encuentra en:
+
+```text
+src/config/swagger.config.js
+```
+
+Se utiliza OpenAPI 3.0.0 con la información general de ShipNow.
+
+La configuración incluye:
+
+- Título: `ShipNow API`.
+- Versión: `1.0.0`.
+- Servidor local: `http://localhost:8080`.
+- Definición de las categorías Users, Orders, Deliveries, Mocks y Logger.
+- Lectura de los archivos YAML ubicados en `src/docs/`.
+
+La documentación se genera utilizando la siguiente ubicación:
+
+```javascript
+apis: ["./src/docs/**/*.yaml"]
+```
+
+Swagger UI se integra en `src/app.js` mediante:
+
+```javascript
+app.use(
+  "/api/docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpecs)
+);
+```
+
+### Acceso a Swagger UI
+
+Con el servidor iniciado, ingresar desde el navegador a:
+
+```text
+http://localhost:8080/api/docs
+```
+
+En esa dirección se encuentra la interfaz interactiva de Swagger.
+
+La interfaz permite:
+
+- Consultar todos los endpoints documentados.
+- Ver los métodos HTTP disponibles.
+- Revisar los parámetros y cuerpos de solicitud.
+- Consultar los códigos de respuesta.
+- Visualizar los schemas de los recursos.
+- Ejecutar solicitudes reales contra la API.
+
+### Organización de la documentación
+
+Los archivos de documentación se encuentran separados por responsabilidad dentro de `src/docs/`.
+
+```text
+src/docs/
+├── schemas.yaml
+├── users.yaml
+├── orders.yaml
+├── deliveries.yaml
+├── mocks.yaml
+└── logger.yaml
+```
+
+**`schemas.yaml`**
+
+Define los schemas reutilizables de los recursos y las respuestas.
+
+**`users.yaml`**
+
+Documenta las operaciones de consulta, registro, actualización y eliminación de usuarios.
+
+**`orders.yaml`**
+
+Documenta las operaciones CRUD de pedidos y sus validaciones.
+
+**`deliveries.yaml`**
+
+Documenta las operaciones CRUD de entregas y sus relaciones con pedidos y repartidores.
+
+**`mocks.yaml`**
+
+Documenta la generación de datos simulados y el proceso de Seed.
+
+**`logger.yaml`**
+
+Documenta el endpoint de prueba de Winston.
+
+Esta organización permite mantener la documentación separada del código de los Controllers y facilita su mantenimiento.
+
+### Endpoints documentados
+
+Se documentaron **21 endpoints**, organizados en cinco categorías.
+
+| Categoría | Cantidad |
+|---|---:|
+| Users | 5 |
+| Orders | 5 |
+| Deliveries | 5 |
+| Mocks | 5 |
+| Logger | 1 |
+| **Total** | **21** |
+
+El endpoint `/api/health` también está disponible en la aplicación, aunque no forma parte de estas cinco categorías documentadas.
+
+### Categoría Users
+
+Se documentaron los siguientes endpoints:
+
+```http
+GET /api/users
+POST /api/users
+GET /api/users/{id}
+PUT /api/users/{id}
+DELETE /api/users/{id}
+```
+
+La documentación incluye:
+
+- Listado de usuarios.
+- Registro de clientes.
+- Consulta por identificador.
+- Actualización de usuarios.
+- Eliminación de usuarios.
+- Cuerpos de solicitud.
+- Respuestas exitosas y errores.
+
+Se especifica que el registro público permite crear usuarios con rol `customer`.
+
+También se documentan los errores relacionados con usuarios inexistentes, emails duplicados, roles no permitidos y validaciones.
+
+### Categoría Orders
+
+Se documentaron los siguientes endpoints:
+
+```http
+GET /api/orders
+POST /api/orders
+GET /api/orders/{id}
+PUT /api/orders/{id}
+DELETE /api/orders/{id}
+```
+
+La documentación incluye:
+
+- Listado de pedidos.
+- Creación de pedidos.
+- Consulta por identificador.
+- Actualización de pedidos.
+- Eliminación de pedidos.
+- Validaciones de clientes e ítems.
+- Campos protegidos.
+- Restricciones de eliminación.
+
+Se documentan errores como:
+
+- `ORDER_NOT_FOUND` — HTTP 404.
+- `ORDER_CUSTOMER_NOT_FOUND` — HTTP 400.
+- `INVALID_CUSTOMER_ROLE` — HTTP 400.
+- `ORDER_ITEMS_REQUIRED` — HTTP 400.
+- `ORDER_PROTECTED_FIELDS` — HTTP 403.
+- `ORDER_HAS_DELIVERY` — HTTP 409.
+
+### Categoría Deliveries
+
+Se documentaron los siguientes endpoints:
+
+```http
+GET /api/deliveries
+POST /api/deliveries
+GET /api/deliveries/{id}
+PUT /api/deliveries/{id}
+DELETE /api/deliveries/{id}
+```
+
+La documentación incluye:
+
+- Listado de entregas.
+- Creación de entregas.
+- Consulta por identificador.
+- Actualización de entregas.
+- Eliminación de entregas.
+- Validación de pedidos existentes.
+- Validación de repartidores.
+- Restricción de entregas duplicadas.
+- Prohibición de modificar el pedido asociado.
+
+Se documentan errores como:
+
+- `DELIVERY_NOT_FOUND` — HTTP 404.
+- `INVALID_DELIVERY_ID` — HTTP 400.
+- `INVALID_ORDER_ID` — HTTP 400.
+- `DELIVERY_ALREADY_EXISTS` — HTTP 409.
+- `INVALID_DRIVER_ID` — HTTP 400.
+- `INVALID_DRIVER` — HTTP 400.
+- `DELIVERY_ORDER_CHANGE_FORBIDDEN` — HTTP 400.
+
+### Categoría Mocks
+
+Se documentaron los siguientes endpoints:
+
+```http
+GET /api/mocks/users
+GET /api/mocks/drivers
+GET /api/mocks/orders
+GET /api/mocks/deliveries
+POST /api/mocks/seed
+```
+
+Los endpoints GET permiten indicar la cantidad mediante el parámetro de consulta `qty`.
+
+Ejemplo:
+
+```http
+GET /api/mocks/users?qty=3
+```
+
+La cantidad permitida es un número entero entre 1 y 100.
+
+Si no se proporciona, se utiliza el valor predeterminado de 10.
+
+Los endpoints GET generan datos simulados en memoria y no modifican MongoDB.
+
+El endpoint POST de Seed inserta datos relacionados en la base de datos.
+
+La documentación especifica que el Seed solo está habilitado cuando:
+
+```env
+NODE_ENV=development
+```
+
+Fuera de desarrollo devuelve HTTP `403` mediante el error `SEED_FORBIDDEN`.
+
+### Categoría Logger
+
+Se documentó el siguiente endpoint:
+
+```http
+GET /api/logger-test
+```
+
+Permite generar mensajes de prueba para los seis niveles de Winston.
+
+Está disponible únicamente en desarrollo.
+
+Su respuesta exitosa es:
+
+```json
+{
+  "status": "success",
+  "message": "Prueba de logging ejecutada correctamente"
+}
+```
+
+### Schemas reutilizables
+
+Los schemas compartidos se definen en:
+
+```text
+src/docs/schemas.yaml
+```
+
+Se incorporaron los siguientes:
+
+| Schema | Descripción |
+|---|---|
+| `ErrorResponse` | Estructura uniforme de errores |
+| `SuccessResponse` | Estructura general de respuesta exitosa |
+| `User` | Datos de un usuario |
+| `UserCreate` | Datos necesarios para registrar un cliente |
+| `OrderItem` | Ítem de un pedido |
+| `Order` | Datos de un pedido |
+| `Delivery` | Datos de una entrega |
+
+Estos schemas permiten reutilizar las definiciones y evitar duplicar estructuras dentro de cada archivo YAML.
+
+### Uso de referencias `$ref`
+
+OpenAPI permite referenciar schemas definidos en `components`.
+
+Por ejemplo:
+
+```yaml
+schema:
+  $ref: "#/components/schemas/User"
+```
+
+Para documentar errores:
+
+```yaml
+schema:
+  $ref: "#/components/schemas/ErrorResponse"
+```
+
+Esto permite que varios endpoints compartan la misma definición.
+
+Si se modifica un schema reutilizable, los endpoints que lo referencian utilizan esa definición actualizada.
+
+### Documentación de parámetros
+
+Se utilizaron parámetros de ruta para identificar recursos individuales.
+
+Ejemplo:
+
+```yaml
+parameters:
+  - name: id
+    in: path
+    required: true
+    description: Identificador MongoDB del recurso
+    schema:
+      type: string
+```
+
+También se utilizaron parámetros de consulta para los endpoints de Mocks.
+
+Ejemplo:
+
+```yaml
+parameters:
+  - name: qty
+    in: query
+    required: false
+    schema:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 10
+```
+
+Los parámetros de ruta y consulta se documentan mediante `parameters`.
+
+Los datos enviados en el cuerpo de una solicitud se documentan mediante `requestBody`.
+
+### Documentación de requestBody
+
+Los endpoints POST y PUT que reciben datos JSON incluyen la definición de `requestBody`.
+
+Ejemplo:
+
+```yaml
+requestBody:
+  required: true
+  content:
+    application/json:
+      schema:
+        type: object
+        required:
+          - order
+        properties:
+          order:
+            type: string
+          priority:
+            type: string
+            enum: [low, normal, high]
+```
+
+Esto permite que Swagger UI muestre los campos disponibles y sus tipos de datos.
+
+### Documentación de respuestas HTTP
+
+Los endpoints incluyen las respuestas correspondientes a sus operaciones.
+
+Entre los códigos utilizados se encuentran:
+
+| HTTP | Significado |
+|---|---|
+| 200 | Operación exitosa |
+| 201 | Recurso creado correctamente |
+| 400 | Solicitud o datos inválidos |
+| 403 | Operación no permitida |
+| 404 | Recurso no encontrado |
+| 409 | Conflicto con el estado actual |
+| 500 | Error interno del servidor |
+
+Los códigos se documentaron respetando los valores definidos en `ErrorDictionary`.
+
+Por ejemplo:
+
+```yaml
+responses:
+  "404":
+    description: Usuario no encontrado
+    content:
+      application/json:
+        schema:
+          $ref: "#/components/schemas/ErrorResponse"
+```
+
+La documentación de múltiples respuestas permite conocer tanto los casos exitosos como los errores posibles de una operación.
+
+### Cómo probar los endpoints desde Swagger UI
+
+Para ejecutar una solicitud desde Swagger:
+
+1. Iniciar el servidor con `npm run dev`.
+2. Abrir `http://localhost:8080/api/docs`.
+3. Seleccionar una categoría.
+4. Desplegar el endpoint deseado.
+5. Presionar **Try it out**.
+6. Completar los parámetros o el JSON cuando corresponda.
+7. Presionar **Execute**.
+8. Revisar el código HTTP y la respuesta recibida.
+
+Swagger UI permite ejecutar solicitudes reales contra la aplicación.
+
+Las operaciones POST, PUT y DELETE pueden modificar los datos almacenados en MongoDB.
+
+### Ejemplo de prueba: generar usuarios mock
+
+Seleccionar:
+
+```http
+GET /api/mocks/users
+```
+
+Presionar **Try it out** y completar:
+
+```text
+qty = 3
+```
+
+Presionar **Execute**.
+
+La API debe responder con HTTP `200` y los tres usuarios simulados generados.
+
+Esta operación no inserta usuarios en MongoDB.
+
+### Ejemplo de prueba: logger
+
+Seleccionar:
+
+```http
+GET /api/logger-test
+```
+
+Presionar **Try it out** y luego **Execute**.
+
+Con `NODE_ENV=development`, la API responde con HTTP `200`.
+
+También se generan mensajes de prueba de los seis niveles de Winston.
+
+### Consideraciones sobre el Seed
+
+Swagger permite ejecutar:
+
+```http
+POST /api/mocks/seed
+```
+
+Con un cuerpo como:
+
+```json
+{
+  "qty": 2
+}
+```
+
+**Importante:** esta operación inserta documentos reales en MongoDB.
+
+Se recomienda utilizarla únicamente sobre una base de datos de desarrollo.
+
+### Pruebas realizadas con Swagger
+
+Durante la incorporación de la documentación se comprobó:
+
+- Que Swagger UI se encuentra disponible en `/api/docs`.
+- Que se visualizan las categorías Users, Orders, Deliveries, Mocks y Logger.
+- Que se muestran los endpoints definidos en los archivos YAML.
+- Que se pueden consultar los schemas reutilizables.
+- Que Swagger permite ejecutar solicitudes mediante **Try it out**.
+- Que `GET /api/users` devuelve usuarios registrados.
+- Que `GET /api/mocks/users?qty=3` devuelve tres usuarios simulados con HTTP 200.
+- Que `GET /api/logger-test` devuelve una respuesta exitosa con HTTP 200 en desarrollo.
+
+Estas comprobaciones verifican la integración de Swagger y el funcionamiento de los endpoints utilizados durante las pruebas.
+
+### Beneficios de Swagger/OpenAPI
+
+- Centraliza la documentación de la API.
+- Facilita la comprensión de los endpoints.
+- Permite consultar parámetros y cuerpos de solicitud.
+- Documenta respuestas exitosas y errores.
+- Reutiliza schemas mediante `$ref`.
+- Facilita las pruebas desde el navegador.
+- Reduce la necesidad de consultar el código fuente para conocer las operaciones disponibles.
+- Mejora el mantenimiento de la documentación.
+- Facilita el trabajo de otros desarrolladores que consuman la API.
+
 ## Scripts
 
 | Comando | Uso |
 |---|---|
+| `npm install` | Instalar dependencias |
 | `npm run dev` | Ejecutar en desarrollo con Nodemon |
 | `npm start` | Ejecutar la aplicación |
 
 ## Información de la entrega
 
-**Curso:** Backend III  
-**Proyecto:** ShipNow API  
-**Entrega:** Pre-entrega Módulo 4 — Logging y monitoreo básico
+**Curso:** Backend III
+
+**Proyecto:** ShipNow API
+
+**Entrega:** Pre-entrega Módulo 5 — Documentación con Swagger/OpenAPI
+
+**Documentación interactiva:** `http://localhost:8080/api/docs`
+
+**Repositorio:** https://github.com/C-Lionel/Backend-III_ShipNow

@@ -1,0 +1,282 @@
+
+paths:
+  /api/mocks/users:
+    get:
+      tags: [Mocks]
+      summary: Generar usuarios simulados
+      description: >
+        Genera usuarios mock con rol customer.
+        No los guarda en MongoDB y no devuelve sus contraseñas.
+      parameters:
+        - name: qty
+          in: query
+          required: false
+          description: Cantidad de usuarios a generar (entre 1 y 100).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+            example: 5
+      responses:
+        "200":
+          description: Usuarios simulados generados correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  payload:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/User"
+        "400":
+          description: Cantidad inválida (INVALID_MOCK_QUANTITY)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/mocks/drivers:
+    get:
+      tags: [Mocks]
+      summary: Generar repartidores simulados
+      description: >
+        Genera usuarios mock con rol driver.
+        No los guarda en MongoDB y no devuelve sus contraseñas.
+      parameters:
+        - name: qty
+          in: query
+          required: false
+          description: Cantidad de repartidores a generar (entre 1 y 100).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+            example: 5
+      responses:
+        "200":
+          description: Repartidores simulados generados correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  payload:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/User"
+        "400":
+          description: Cantidad inválida (INVALID_MOCK_QUANTITY)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/mocks/orders:
+    get:
+      tags: [Mocks]
+      summary: Generar pedidos simulados
+      description: >
+        Genera clientes y pedidos mock relacionados entre sí.
+        No inserta datos en MongoDB.
+        Las contraseñas de los clientes se excluyen de la respuesta.
+      parameters:
+        - name: qty
+          in: query
+          required: false
+          description: Cantidad de clientes y pedidos a generar (entre 1 y 100).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+            example: 5
+      responses:
+        "200":
+          description: Clientes y pedidos simulados generados correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  payload:
+                    type: object
+                    properties:
+                      customers:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/User"
+                      orders:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Order"
+        "400":
+          description: Cantidad inválida (INVALID_MOCK_QUANTITY)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/mocks/deliveries:
+    get:
+      tags: [Mocks]
+      summary: Generar entregas simuladas
+      description: >
+        Genera clientes, repartidores, pedidos y entregas mock
+        relacionados entre sí. No inserta datos en MongoDB.
+        Las contraseñas se excluyen de la respuesta.
+      parameters:
+        - name: qty
+          in: query
+          required: false
+          description: Cantidad de registros por categoría (entre 1 y 100).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+            example: 5
+      responses:
+        "200":
+          description: Datos simulados generados correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  payload:
+                    type: object
+                    properties:
+                      customers:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/User"
+                      drivers:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/User"
+                      orders:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Order"
+                      deliveries:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Delivery"
+        "400":
+          description: Cantidad inválida (INVALID_MOCK_QUANTITY)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/mocks/seed:
+    post:
+      tags: [Mocks]
+      summary: Insertar datos simulados en MongoDB
+      description: >
+        Inserta clientes, repartidores, pedidos y entregas
+        relacionados mediante una transacción de MongoDB.
+        Las contraseñas se almacenan cifradas con bcrypt.
+        Este endpoint solamente puede ejecutarse en desarrollo
+        (NODE_ENV=development).
+        Para qty=10 se crean 10 clientes, 10 repartidores,
+        10 pedidos y 10 entregas.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                qty:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+                  default: 10
+                  example: 5
+      responses:
+        "201":
+          description: Datos simulados insertados correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Datos simulados insertados correctamente
+                  payload:
+                    type: object
+                    properties:
+                      customers:
+                        type: integer
+                        example: 5
+                      drivers:
+                        type: integer
+                        example: 5
+                      orders:
+                        type: integer
+                        example: 5
+                      deliveries:
+                        type: integer
+                        example: 5
+        "400":
+          description: Cantidad inválida (INVALID_MOCK_QUANTITY)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Seed prohibido fuera de desarrollo (SEED_FORBIDDEN)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor o fallo durante la transacción
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
