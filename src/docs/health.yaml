@@ -1,0 +1,30 @@
+
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Verificar el estado del servidor
+      description: >
+        Comprueba que la API está funcionando.
+        Devuelve el estado del servidor y la fecha y hora
+        actuales en formato ISO 8601.
+        No verifica la conexión con MongoDB.
+      responses:
+        "200":
+          description: Servidor funcionando correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                  - timestamp
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2026-11-10T12:00:00.000Z"

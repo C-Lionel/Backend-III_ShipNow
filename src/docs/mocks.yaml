@@ -24,15 +24,14 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  payload:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/User"
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      payload:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/User"
         "400":
           description: Cantidad inválida (INVALID_MOCK_QUANTITY)
           content:
@@ -70,15 +69,14 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  payload:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/User"
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      payload:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/User"
         "400":
           description: Cantidad inválida (INVALID_MOCK_QUANTITY)
           content:
@@ -117,22 +115,21 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  payload:
-                    type: object
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
                     properties:
-                      customers:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/User"
-                      orders:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/Order"
+                      payload:
+                        type: object
+                        properties:
+                          customers:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/User"
+                          orders:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/Order"
         "400":
           description: Cantidad inválida (INVALID_MOCK_QUANTITY)
           content:
@@ -171,30 +168,29 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  payload:
-                    type: object
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
                     properties:
-                      customers:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/User"
-                      drivers:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/User"
-                      orders:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/Order"
-                      deliveries:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/Delivery"
+                      payload:
+                        type: object
+                        properties:
+                          customers:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/User"
+                          drivers:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/User"
+                          orders:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/Order"
+                          deliveries:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/Delivery"
         "400":
           description: Cantidad inválida (INVALID_MOCK_QUANTITY)
           content:
@@ -239,29 +235,28 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Datos simulados insertados correctamente
-                  payload:
-                    type: object
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
                     properties:
-                      customers:
-                        type: integer
-                        example: 5
-                      drivers:
-                        type: integer
-                        example: 5
-                      orders:
-                        type: integer
-                        example: 5
-                      deliveries:
-                        type: integer
-                        example: 5
+                      message:
+                        type: string
+                        example: Datos simulados insertados correctamente
+                      payload:
+                        type: object
+                        properties:
+                          customers:
+                            type: integer
+                            example: 5
+                          drivers:
+                            type: integer
+                            example: 5
+                          orders:
+                            type: integer
+                            example: 5
+                          deliveries:
+                            type: integer
+                            example: 5
         "400":
           description: Cantidad inválida (INVALID_MOCK_QUANTITY)
           content:
