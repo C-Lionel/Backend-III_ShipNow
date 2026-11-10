@@ -43,7 +43,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // Prueba de los niveles de Winston (solo desarrollo)
-if (process.env.NODE_ENV === 'development') {
+if (['development', 'test'].includes(process.env.NODE_ENV)) {
   app.get('/api/logger-test', (req, res) => {
     logger.debug('Prueba de nivel debug');
     logger.http('Prueba de nivel http');
