@@ -702,48 +702,99 @@ Los endpoints incluyen respuestas exitosas y errores.
 
 **Importante:** las operaciones POST, PUT y DELETE pueden modificar MongoDB.
 
+
 ## Testing automatizado — Módulo 6
 
-En el Módulo 6 se incorporó una suite de pruebas automatizadas para verificar el comportamiento de la API.
+En el Módulo 6 se incorporó una suite de pruebas automatizadas para verificar el comportamiento de la API ShipNow.
 
-Se utilizaron:
+Se utilizaron las siguientes herramientas:
 
 - **Mocha:** organiza y ejecuta los tests.
-- **Chai:** permite realizar aserciones.
-- **Supertest:** ejecuta solicitudes HTTP contra Express.
+- **Chai:** permite realizar aserciones sobre los resultados.
+- **Supertest:** ejecuta solicitudes HTTP contra la aplicación Express.
 - **cross-env:** configura el entorno de testing de forma compatible con diferentes sistemas operativos.
+- **mongodb-memory-server:** inicia una instancia temporal de MongoDB para ejecutar las pruebas sin depender de una base de datos externa.
 
-El objetivo es comprobar que los endpoints devuelvan las respuestas esperadas y que las reglas de negocio funcionen correctamente.
+El objetivo es comprobar que los endpoints devuelvan las respuestas esperadas, que las reglas de negocio funcionen correctamente y que las operaciones de persistencia se ejecuten de manera segura y reproducible.
 
 ### Dependencias de testing
 
-Las dependencias de desarrollo incluyen:
+Las herramientas de testing están declaradas como dependencias de desarrollo en `package.json`.
+
+Entre ellas se encuentran:
+
+- `mocha`
+- `chai`
+- `supertest`
+- `cross-env`
+- `mongodb-memory-server`
+
+Para instalar todas las dependencias del proyecto:
 
 ```bash
-npm install --save-dev mocha chai supertest cross-env
+npm install
 ```
+
+Para realizar una instalación limpia y reproducible utilizando las versiones registradas en `package-lock.json`:
+
+```bash
+npm ci
+```
+
+Este último comando instala las dependencias desde cero y permite verificar que el proyecto pueda ejecutarse en otra computadora sin depender de una instalación previa.
+
+Es importante instalar también las dependencias de desarrollo, ya que Mocha, Chai, Supertest y cross-env son necesarias para ejecutar la suite.
 
 ### Configuración del entorno
 
-Los tests se ejecutan con:
+Los tests se ejecutan utilizando:
 
 ```env
 NODE_ENV=test
 ```
 
-Se utiliza un archivo `.env.test` con la configuración necesaria para las pruebas.
+El script definido en `package.json` configura automáticamente esta variable mediante `cross-env`.
 
-La base de datos utilizada es:
+Durante las pruebas no es necesario configurar credenciales de MongoDB Atlas ni disponer de un archivo `.env.test`.
+
+La base de datos de testing se crea automáticamente mediante `mongodb-memory-server`.
+
+El nombre utilizado para la base temporal es:
 
 ```text
 shipnow_test
 ```
 
-Esta base se encuentra separada de la base utilizada durante el desarrollo.
+Esta base se encuentra completamente separada de la base de desarrollo `shipnow`, utilizada por la aplicación mediante MongoDB Atlas.
 
-Esto permite ejecutar pruebas sin modificar los datos habituales de la aplicación.
+De esta manera, los tests no modifican los datos reales del entorno de desarrollo.
 
-Los archivos `.env` y `.env.test` no deben subirse a GitHub si contienen credenciales.
+### MongoDB en memoria
+
+Para mejorar la reproducibilidad de las pruebas se incorporó la librería `mongodb-memory-server`.
+
+Esta herramienta permite iniciar una instancia temporal de MongoDB directamente desde el entorno de testing.
+
+Su funcionamiento es el siguiente:
+
+1. Se ejecuta `npm test`.
+2. Mocha carga la configuración de testing.
+3. `mongodb-memory-server` inicia una instancia local de MongoDB.
+4. Mongoose establece una conexión con esa instancia.
+5. Se ejecutan los tests automatizados.
+6. Los tests crean y consultan documentos temporales.
+7. Al finalizar, Mongoose cierra la conexión.
+8. La instancia temporal de MongoDB se detiene y sus datos se descartan.
+
+Este mecanismo evita depender de:
+
+- Credenciales de MongoDB Atlas.
+- Una base de datos externa permanentemente disponible.
+- Una conexión a internet durante la ejecución de las pruebas, una vez descargado el ejecutable de MongoDB.
+- Datos cargados manualmente antes de ejecutar los tests.
+- Limpieza manual de colecciones entre ejecuciones.
+
+**Nota:** durante la primera ejecución, `mongodb-memory-server` puede necesitar descargar el ejecutable de MongoDB. Las ejecuciones posteriores pueden reutilizar el ejecutable descargado.
 
 ### Configuración de Mocha
 
@@ -757,25 +808,48 @@ El script de testing definido en `package.json` es:
 }
 ```
 
-El script:
+Este script:
 
 1. Configura `NODE_ENV=test`.
 2. Ejecuta Mocha.
 3. Carga `tests/config/test.setup.js`.
-4. Busca archivos terminados en `.test.js`.
-5. Establece un timeout de 10 segundos por test.
+4. Busca los archivos terminados en `.test.js`.
+5. Establece un timeout general de 10 segundos por test.
 
-### Conexión con MongoDB
+La inicialización de MongoDB en memoria dispone de un timeout específico de 120 segundos para contemplar el tiempo necesario durante el primer inicio.
 
-El archivo:
+### Configuración de MongoDB para testing
+
+El archivo responsable de preparar el entorno es:
 
 ```text
 tests/config/test.setup.js
 ```
 
-Se encarga de preparar la conexión de Mongoose para los tests y cerrarla al finalizar.
+Este archivo utiliza los hooks globales de Mocha:
 
-La configuración permite trabajar con la base `shipnow_test`.
+- `before`: inicia MongoDB en memoria y conecta Mongoose.
+- `after`: desconecta Mongoose y detiene MongoDB.
+
+La conexión se establece utilizando la URI temporal generada por `MongoMemoryServer`.
+
+Por lo tanto, los tests no necesitan utilizar la variable `MONGODB_URI` de MongoDB Atlas.
+
+### Configuración de la aplicación
+
+El archivo:
+
+```text
+src/config/config.js
+```
+
+Distingue entre el entorno de testing y los demás entornos.
+
+En desarrollo, la aplicación continúa utilizando las variables definidas en `.env` para conectarse a MongoDB Atlas.
+
+En testing, no se exige una URI externa de MongoDB, ya que la conexión es administrada por `tests/config/test.setup.js`.
+
+Esta separación permite mantener el funcionamiento habitual de ShipNow sin afectar la ejecución de los tests.
 
 ### Organización de las pruebas
 
@@ -797,7 +871,7 @@ tests/
     └── swagger.test.js
 ```
 
-Cada archivo agrupa las pruebas relacionadas con un módulo.
+Cada archivo agrupa las pruebas relacionadas con un recurso o componente de la aplicación.
 
 ### Tests de Users
 
@@ -851,7 +925,7 @@ Se verifica:
 13. Devolver HTTP 404 al actualizar un pedido inexistente.
 14. Devolver HTTP 404 al eliminar un pedido inexistente.
 
-Se comprueba la persistencia de los pedidos en MongoDB y la aplicación de reglas de negocio.
+Se comprueba la persistencia de los pedidos en MongoDB y la aplicación de las reglas de negocio.
 
 ### Tests de Deliveries
 
@@ -861,30 +935,28 @@ Archivo:
 tests/deliveries/deliveries.test.js
 ```
 
-Se implementaron **16 tests funcionales** para comprobar las operaciones y reglas de negocio del módulo de entregas.
+Se implementaron **16 tests funcionales**.
 
 Se verifica:
 
 1. Obtener el listado de entregas.
 2. Crear una entrega sin repartidor.
 3. Crear una entrega con repartidor.
-4. Asignar el estado `pending` al crear una entrega sin repartidor.
-5. Asignar el estado `assigned` cuando se crea con repartidor.
-6. Asignar prioridad `normal` por defecto.
-7. Permitir prioridad `high`.
-8. Relacionar correctamente la entrega con su pedido.
-9. Obtener una entrega existente por ID.
-10. Actualizar el estado de una entrega.
-11. Asignar un repartidor a una entrega existente.
-12. Eliminar una entrega y desvincularla del pedido.
-13. Rechazar identificadores de pedido inválidos o inexistentes.
-14. Impedir crear dos entregas para el mismo pedido.
-15. Rechazar usuarios que no tengan rol `driver` e impedir cambiar el pedido asociado.
+4. Asignar prioridad `normal` por defecto.
+5. Permitir prioridad `high`.
+6. Relacionar correctamente la entrega con su pedido.
+7. Obtener una entrega existente por ID.
+8. Actualizar el estado de una entrega.
+9. Asignar un repartidor a una entrega existente.
+10. Eliminar una entrega y desvincularla del pedido.
+11. Rechazar una entrega con ID de pedido inválido.
+12. Rechazar una entrega con pedido inexistente.
+13. Impedir crear dos entregas para el mismo pedido.
+14. Rechazar un usuario que no tenga rol `driver`.
+15. Impedir cambiar el pedido asociado a una entrega.
 16. Devolver HTTP 404 para una entrega inexistente.
 
-Los tests crean usuarios, pedidos y entregas de prueba en `shipnow_test`.
-
-Después de cada ejecución se eliminan los registros generados, manteniendo el entorno preparado para futuras pruebas.
+Los tests crean usuarios, pedidos y entregas temporales para comprobar las relaciones entre los documentos y las reglas de negocio.
 
 ### Tests de Mocks
 
@@ -929,7 +1001,7 @@ Se implementaron **4 tests**.
 Se verifica:
 
 1. La respuesta exitosa del endpoint `/api/logger-test`.
-2. La configuración de los seis niveles personalizados.
+2. La configuración de los seis niveles personalizados de Winston.
 3. La utilización del nivel `debug` durante testing.
 4. La existencia del transporte de consola.
 
@@ -964,9 +1036,55 @@ Se verifica:
 | Swagger | 4 | Correcto |
 | **Total** | **61** | **61 passing** |
 
-### Ejecución de los tests
+### Ejecución reproducible desde cero
 
-Desde la raíz del proyecto:
+Para ejecutar las pruebas en una computadora nueva, primero se debe clonar el repositorio:
+
+```bash
+git clone https://github.com/C-Lionel/Backend-III_ShipNow.git
+```
+
+Ingresar a la carpeta del proyecto:
+
+```bash
+cd Backend-III_ShipNow
+```
+
+Instalar las dependencias utilizando el archivo `package-lock.json`:
+
+```bash
+npm ci
+```
+
+Ejecutar la suite:
+
+```bash
+npm test
+```
+
+Resultado esperado:
+
+```text
+MongoDB en memoria iniciado para testing
+
+61 passing
+
+MongoDB en memoria detenido
+```
+
+No es necesario crear un archivo `.env.test` ni configurar una conexión externa de MongoDB para ejecutar estas pruebas.
+
+### Verificación de ejecuciones consecutivas
+
+Para comprobar que las pruebas son reproducibles, se ejecutó la suite varias veces consecutivas.
+
+También se realizó una instalación limpia de dependencias mediante:
+
+```bash
+npm ci
+```
+
+Posteriormente se ejecutó:
 
 ```bash
 npm test
@@ -975,35 +1093,91 @@ npm test
 Resultado obtenido:
 
 ```text
-61 passing
+61 passing (2s)
 ```
 
-La suite de 45 tests se ejecutó dos veces consecutivas sin presentar fallos.
+Los 61 tests finalizaron correctamente después de reinstalar las dependencias.
 
-Posteriormente se incorporaron los 16 tests de Deliveries, alcanzando un total de **61 tests exitosos**.
+Esto permitió comprobar que las herramientas de testing, incluido `cross-env`, se encuentran correctamente declaradas e instaladas.
 
-### Aislamiento de datos
+### Aislamiento y limpieza de datos
 
-Los tests que crean registros utilizan datos de prueba.
+La suite utiliza dos mecanismos de aislamiento.
 
-Se implementaron mecanismos de limpieza para eliminar los registros generados durante las pruebas.
+**1. Limpieza mediante hooks**
 
-La base `shipnow_test` permite mantener separados los datos de testing y desarrollo.
+Los tests que crean documentos utilizan hooks como `beforeEach` y `afterEach` para preparar y eliminar los datos necesarios.
 
-### Pruebas de errores
+Esto permite que cada prueba trabaje con registros controlados.
 
-La suite también comprueba respuestas HTTP de error, incluyendo:
+**2. MongoDB temporal**
+
+La instancia creada por `mongodb-memory-server` se inicia al comenzar la suite y se detiene al finalizar.
+
+Los datos de esa instancia se descartan automáticamente.
+
+Por lo tanto:
+
+- No es necesario borrar colecciones manualmente.
+- No quedan registros persistentes en MongoDB Atlas.
+- Los tests pueden ejecutarse repetidamente.
+- Cada ejecución comienza con una instancia temporal independiente.
+- Los datos de desarrollo permanecen intactos.
+
+Este mecanismo permite mantener las pruebas aisladas y reproducibles.
+
+### Pruebas de errores HTTP
+
+La suite comprueba respuestas de error, incluyendo:
 
 - `400` — Datos inválidos.
 - `403` — Operaciones prohibidas.
 - `404` — Recursos inexistentes.
 - `409` — Conflictos.
 
-Estas pruebas permiten verificar el funcionamiento del middleware global y de `ErrorDictionary`.
+También se verifica el formato estandarizado de errores de la API:
+
+```json
+{
+  "status": "error",
+  "message": "Usuario no encontrado",
+  "code": "USER_NOT_FOUND"
+}
+```
+
+Este formato es coherente con el middleware global de errores y la documentación Swagger.
+
+### Verificación explícita de errores 404
+
+Se implementaron pruebas específicas para comprobar que la API devuelve HTTP 404 cuando se solicita un recurso inexistente.
+
+Entre los casos cubiertos se encuentran:
+
+- Obtener un usuario inexistente.
+- Obtener un pedido inexistente.
+- Actualizar un pedido inexistente.
+- Eliminar un pedido inexistente.
+- Obtener una entrega inexistente.
+
+Estas pruebas utilizan identificadores válidos de MongoDB que no corresponden a documentos existentes.
+
+De esta manera, se comprueba que la aplicación distingue correctamente entre un identificador inválido y un recurso que no existe.
+
+### Mensajes de Winston durante los tests
 
 Durante la ejecución pueden aparecer mensajes `warning` de Winston.
 
-Estos mensajes corresponden a errores provocados intencionalmente por los tests y no indican fallos de la suite.
+Estos mensajes corresponden a errores provocados intencionalmente por los tests.
+
+Por ejemplo:
+
+```text
+[warning] GET /api/users/... - USER_NOT_FOUND: Usuario no encontrado
+```
+
+Estos registros no representan fallos de la suite.
+
+Se utilizan para comprobar que la API responde correctamente ante situaciones de error.
 
 ### Beneficios del testing
 
@@ -1012,18 +1186,22 @@ Estos mensajes corresponden a errores provocados intencionalmente por los tests 
 - Comprobar las respuestas HTTP.
 - Validar la persistencia de datos.
 - Comprobar las restricciones de seguridad.
-- Reducir la necesidad de realizar pruebas manuales repetitivas.
+- Reducir las pruebas manuales repetitivas.
 - Facilitar futuras modificaciones del proyecto.
-- Verificar que los cambios no afecten funcionalidades existentes.
+- Detectar regresiones.
+- Ejecutar pruebas sin credenciales externas.
+- Garantizar el aislamiento de los datos de desarrollo.
+- Facilitar la reproducción de los tests en otras computadoras.
 
 ## Scripts disponibles
 
 | Comando | Descripción |
 |---|---|
 | `npm install` | Instalar dependencias |
+| `npm ci` | Realizar una instalación limpia y reproducible |
 | `npm run dev` | Ejecutar en desarrollo |
 | `npm start` | Ejecutar la aplicación |
-| `npm test` | Ejecutar la suite de testing |
+| `npm test` | Ejecutar los 61 tests con MongoDB en memoria |
 
 ## Información de la entrega
 
@@ -1036,6 +1214,12 @@ Estos mensajes corresponden a errores provocados intencionalmente por los tests 
 **Tests implementados:** 61
 
 **Resultado:** 61 passing
+
+**Base de testing:** MongoDB temporal mediante `mongodb-memory-server`
+
+**Instalación verificada:** `npm ci`
+
+**Reproducibilidad:** suite ejecutada correctamente en múltiples ocasiones, sin limpieza manual ni credenciales de MongoDB Atlas.
 
 **Documentación interactiva:** http://localhost:8080/api/docs
 

@@ -1,24 +1,36 @@
 
 import mongoose from "mongoose";
 import { before, after } from "mocha";
-import { config } from "../../src/config/config.js";
+import { MongoMemoryServer } from "mongodb-memory-server";
 
-before(async () => {
-  if (config.nodeEnv !== "test") {
+let mongoServer;
+
+before(async function () {
+  this.timeout(120000);
+
+  if (process.env.NODE_ENV !== "test") {
     throw new Error("Los tests requieren NODE_ENV=test");
   }
 
-  const databaseName = new URL(config.mongoUri).pathname.slice(1);
+  mongoServer = await MongoMemoryServer.create({
+    instance: {
+      dbName: "shipnow_test"
+    }
+  });
 
-  if (databaseName !== "shipnow_test") {
-    throw new Error("Los tests solo pueden utilizar shipnow_test");
-  }
+  const mongoUri = mongoServer.getUri();
 
-  if (mongoose.connection.readyState === 0) {
-    await mongoose.connect(config.mongoUri);
-  }
+  await mongoose.connect(mongoUri);
+
+  console.log("MongoDB en memoria iniciado para testing");
 });
 
-after(async () => {
+after(async function () {
   await mongoose.disconnect();
+
+  if (mongoServer) {
+    await mongoServer.stop();
+  }
+
+  console.log("MongoDB en memoria detenido");
 });

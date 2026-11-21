@@ -3,35 +3,32 @@ import dotenv from "dotenv";
 
 const isTest = process.env.NODE_ENV === "test";
 
-dotenv.config({
-  path: isTest ? ".env.test" : ".env",
-  override: isTest
-});
+// En desarrollo y producción cargamos las variables desde .env.
+// En testing no necesitamos credenciales externas.
+if (!isTest) {
+  dotenv.config({ path: ".env" });
+}
 
-const requiredEnv = [
-  "PORT",
-  "MONGODB_URI",
-  "NODE_ENV"
-];
+// Variables obligatorias para ejecutar la aplicación.
+// Durante testing MongoDB se inicia en memoria.
+if (!isTest) {
+  const requiredEnv = [
+    "PORT",
+    "MONGODB_URI",
+    "NODE_ENV"
+  ];
 
-requiredEnv.forEach((envVar) => {
-  if (!process.env[envVar]) {
-    throw new Error(`Falta configurar la variable: ${envVar}`);
-  }
-});
-
-if (process.env.NODE_ENV === "test") {
-  const databaseName = new URL(process.env.MONGODB_URI).pathname.slice(1);
-
-  if (databaseName !== "shipnow_test") {
-    throw new Error(
-      "SEGURIDAD: Los tests solo pueden utilizar la base shipnow_test"
-    );
-  }
+  requiredEnv.forEach((envVar) => {
+    if (!process.env[envVar]) {
+      throw new Error(
+        `Falta configurar la variable: ${envVar}`
+      );
+    }
+  });
 }
 
 export const config = {
-  port: process.env.PORT,
-  mongoUri: process.env.MONGODB_URI,
+  port: isTest ? 8081 : process.env.PORT,
+  mongoUri: isTest ? null : process.env.MONGODB_URI,
   nodeEnv: process.env.NODE_ENV
 };
