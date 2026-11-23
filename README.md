@@ -13,6 +13,7 @@ El proyecto utiliza una arquitectura por capas para separar las responsabilidade
 - **Módulo 4:** Logging centralizado con Winston y rotación automática de archivos.
 - **Módulo 5:** Documentación interactiva mediante Swagger UI y OpenAPI 3.0.0.
 - **Módulo 6:** Testing automatizado mediante Mocha, Chai y Supertest.
+- **Módulo 7:** Carga de archivos mediante Multer, validación de documentos, almacenamiento local y persistencia de metadatos en MongoDB.
 
 ## Tecnologías
 
@@ -33,6 +34,8 @@ El proyecto utiliza una arquitectura por capas para separar las responsabilidade
 - Chai
 - Supertest
 - cross-env
+- mongodb-memory-server
+- Multer
 
 ## Arquitectura
 
@@ -73,6 +76,9 @@ Entre sus responsabilidades se encuentran:
 - Generar datos simulados.
 - Lanzar errores personalizados mediante `AppError`.
 - Registrar eventos mediante Winston.
+- Validar y registrar documentos asociados a usuarios.
+- Registrar comprobantes asociados a entregas.
+- Persistir metadatos de archivos en MongoDB.
 
 ### Repository
 
@@ -80,11 +86,15 @@ Encapsula las operaciones de acceso a MongoDB mediante Mongoose.
 
 Permite consultar, crear, actualizar y eliminar documentos, manteniendo separada la lógica de persistencia.
 
-### Middleware de errores
+### Middlewares
 
-Centraliza el tratamiento de errores y devuelve respuestas HTTP uniformes.
+Los middlewares permiten incorporar funcionalidades transversales a las solicitudes HTTP.
 
-También registra los errores mediante Winston.
+Entre ellos se encuentran:
+
+- Manejo centralizado de errores.
+- Procesamiento de archivos mediante Multer.
+- Validación de tipos y tamaños de archivos.
 
 ## Estructura del proyecto
 
@@ -93,6 +103,7 @@ src/
 ├── config/
 │   └── swagger.config.js
 ├── constants/
+│   └── index.js
 ├── controllers/
 ├── docs/
 │   ├── schemas.yaml
@@ -102,6 +113,8 @@ src/
 │   ├── mocks.yaml
 │   └── logger.yaml
 ├── middlewares/
+│   ├── error.middleware.js
+│   └── upload.middleware.js
 ├── mocks/
 ├── models/
 ├── repositories/
@@ -118,28 +131,40 @@ tests/
 ├── config/
 │   └── test.setup.js
 ├── users/
-│   └── users.test.js
+│   ├── users.test.js
+│   └── documents.test.js
 ├── orders/
 │   └── orders.test.js
 ├── deliveries/
-│   └── deliveries.test.js
+│   ├── deliveries.test.js
+│   └── proofs.test.js
 ├── mocks/
 │   └── mocks.test.js
 ├── logger/
 │   └── logger.test.js
 └── swagger/
     └── swagger.test.js
+
+uploads/
+├── temp/
+├── user-documents/
+├── driver-licenses/
+└── delivery-proofs/
+
+logs/
 ```
 
-Los archivos de logging se generan en la carpeta `logs/`.
+Las carpetas `uploads/` y `logs/` contienen archivos generados durante la ejecución y están excluidas del repositorio mediante `.gitignore`.
 
 ## Requisitos
 
 - Node.js 18 o superior.
 - npm.
-- MongoDB local o MongoDB Atlas.
+- MongoDB local o MongoDB Atlas para ejecutar la aplicación.
 
 Para ejecutar el Seed con transacciones, MongoDB debe admitir transacciones, por ejemplo mediante un replica set o un clúster compatible de MongoDB Atlas.
+
+Los tests utilizan una instancia temporal de MongoDB mediante `mongodb-memory-server`.
 
 ## Instalación
 
@@ -159,6 +184,12 @@ Instalar las dependencias:
 
 ```bash
 npm install
+```
+
+También es posible realizar una instalación limpia utilizando las versiones registradas en `package-lock.json`:
+
+```bash
+npm ci
 ```
 
 Crear un archivo `.env` en la raíz del proyecto tomando como referencia `.env.example`.
@@ -195,6 +226,12 @@ La API queda disponible en:
 http://localhost:8080
 ```
 
+La documentación Swagger está disponible en:
+
+```text
+http://localhost:8080/api/docs
+```
+
 ## Endpoints
 
 ### Health Check
@@ -212,10 +249,13 @@ http://localhost:8080
 | GET | `/api/users/:id` | Obtener un usuario por ID |
 | PUT | `/api/users/:id` | Actualizar un usuario |
 | DELETE | `/api/users/:id` | Eliminar un usuario |
+| POST | `/api/users/:id/documents` | Cargar un documento de usuario |
 
 El registro público permite crear usuarios con rol `customer`.
 
 Las contraseñas se almacenan utilizando bcrypt y se excluyen de las respuestas de consulta.
+
+Los documentos se cargan mediante solicitudes `multipart/form-data`.
 
 ### Pedidos
 
@@ -244,12 +284,15 @@ No se permite modificar directamente campos protegidos como `customer`, `items`,
 | GET | `/api/deliveries/:id` | Obtener una entrega por ID |
 | PUT | `/api/deliveries/:id` | Actualizar una entrega |
 | DELETE | `/api/deliveries/:id` | Eliminar una entrega |
+| POST | `/api/deliveries/:id/proof` | Cargar un comprobante de entrega |
 
 Cada entrega está asociada a un pedido y puede tener un repartidor asignado.
 
 Los repartidores son usuarios con rol `driver`.
 
 No se permite crear más de una entrega para el mismo pedido.
+
+Una entrega puede almacenar múltiples comprobantes en su arreglo `proofs`.
 
 ### Mocks
 
@@ -263,9 +306,7 @@ No se permite crear más de una entrega para el mismo pedido.
 
 Los endpoints GET generan datos en memoria y no realizan inserciones en MongoDB.
 
-El parámetro `qty` permite indicar una cantidad entre 1 y 100.
-
-Si no se proporciona, se utiliza 10.
+El parámetro `qty` permite indicar una cantidad entre 1 y 100. Si no se proporciona, se utiliza 10.
 
 ### Logger
 
@@ -411,7 +452,7 @@ src/middlewares/error.middleware.js
 
 Procesa los errores derivados mediante `next(error)`.
 
-También contempla errores de Express y Mongoose.
+También contempla errores de Express, Mongoose y Multer.
 
 ### Formato de respuesta
 
@@ -454,6 +495,12 @@ El código HTTP se establece en la respuesta y no se incluye dentro del JSON.
 | `VALIDATION_ERROR` | 400 | Error de validación |
 | `ROUTE_NOT_FOUND` | 404 | Ruta inexistente |
 | `INTERNAL_SERVER_ERROR` | 500 | Error interno |
+| `FILE_REQUIRED` | 400 | Archivo obligatorio |
+| `INVALID_FILE_TYPE` | 400 | Formato de archivo no permitido |
+| `FILE_TOO_LARGE` | 413 | Archivo superior al tamaño máximo |
+| `INVALID_FILE_FIELD` | 400 | Campo de archivo incorrecto |
+| `INVALID_DOCUMENT_TYPE` | 400 | Tipo de documento inválido |
+| `FILE_UPLOAD_ERROR` | 500 | Error durante la carga del archivo |
 
 ### Ejemplos de pruebas
 
@@ -541,7 +588,7 @@ Configuración de rotación:
 - Retención: 14 días.
 - Niveles almacenados: `error` y `fatal`.
 
-La carpeta `logs/` debe estar excluida mediante `.gitignore`.
+La carpeta `logs/` está excluida mediante `.gitignore`.
 
 ### Endpoint de prueba
 
@@ -616,17 +663,18 @@ Swagger UI permite:
 - Consultar respuestas HTTP.
 - Revisar schemas.
 - Ejecutar solicitudes reales mediante `Try it out`.
+- Cargar documentos mediante formularios `multipart/form-data`.
 
 ### Endpoints documentados
 
 | Categoría | Cantidad |
 |---|---:|
-| Users | 5 |
+| Users | 6 |
 | Orders | 5 |
-| Deliveries | 5 |
+| Deliveries | 6 |
 | Mocks | 5 |
 | Logger | 1 |
-| **Total** | **21** |
+| **Total** | **23** |
 
 El endpoint `/api/health` también está disponible, aunque no forma parte de estas cinco categorías.
 
@@ -647,6 +695,9 @@ Incluye definiciones como:
 - `OrderItem`
 - `Order`
 - `Delivery`
+- `UploadedDocument`
+
+El esquema `UploadedDocument` representa los metadatos de los archivos almacenados.
 
 Ejemplo de referencia:
 
@@ -687,6 +738,7 @@ Los endpoints incluyen respuestas exitosas y errores.
 | 403 | Operación prohibida |
 | 404 | Recurso inexistente |
 | 409 | Conflicto |
+| 413 | Archivo demasiado grande |
 | 500 | Error interno |
 
 ### Uso de Swagger UI
@@ -702,10 +754,11 @@ Los endpoints incluyen respuestas exitosas y errores.
 
 **Importante:** las operaciones POST, PUT y DELETE pueden modificar MongoDB.
 
-
 ## Testing automatizado — Módulo 6
 
 En el Módulo 6 se incorporó una suite de pruebas automatizadas para verificar el comportamiento de la API ShipNow.
+
+Posteriormente, en el Módulo 7, se agregaron pruebas específicas para la carga de documentos y comprobantes.
 
 Se utilizaron las siguientes herramientas:
 
@@ -714,8 +767,6 @@ Se utilizaron las siguientes herramientas:
 - **Supertest:** ejecuta solicitudes HTTP contra la aplicación Express.
 - **cross-env:** configura el entorno de testing de forma compatible con diferentes sistemas operativos.
 - **mongodb-memory-server:** inicia una instancia temporal de MongoDB para ejecutar las pruebas sin depender de una base de datos externa.
-
-El objetivo es comprobar que los endpoints devuelvan las respuestas esperadas, que las reglas de negocio funcionen correctamente y que las operaciones de persistencia se ejecuten de manera segura y reproducible.
 
 ### Dependencias de testing
 
@@ -729,21 +780,17 @@ Entre ellas se encuentran:
 - `cross-env`
 - `mongodb-memory-server`
 
-Para instalar todas las dependencias del proyecto:
+Para instalar todas las dependencias:
 
 ```bash
 npm install
 ```
 
-Para realizar una instalación limpia y reproducible utilizando las versiones registradas en `package-lock.json`:
+Para una instalación limpia y reproducible:
 
 ```bash
 npm ci
 ```
-
-Este último comando instala las dependencias desde cero y permite verificar que el proyecto pueda ejecutarse en otra computadora sin depender de una instalación previa.
-
-Es importante instalar también las dependencias de desarrollo, ya que Mocha, Chai, Supertest y cross-env son necesarias para ejecutar la suite.
 
 ### Configuración del entorno
 
@@ -765,17 +812,11 @@ El nombre utilizado para la base temporal es:
 shipnow_test
 ```
 
-Esta base se encuentra completamente separada de la base de desarrollo `shipnow`, utilizada por la aplicación mediante MongoDB Atlas.
-
-De esta manera, los tests no modifican los datos reales del entorno de desarrollo.
+Esta base se encuentra separada de la base de desarrollo utilizada por la aplicación mediante MongoDB Atlas.
 
 ### MongoDB en memoria
 
-Para mejorar la reproducibilidad de las pruebas se incorporó la librería `mongodb-memory-server`.
-
-Esta herramienta permite iniciar una instancia temporal de MongoDB directamente desde el entorno de testing.
-
-Su funcionamiento es el siguiente:
+El funcionamiento es el siguiente:
 
 1. Se ejecuta `npm test`.
 2. Mocha carga la configuración de testing.
@@ -786,15 +827,7 @@ Su funcionamiento es el siguiente:
 7. Al finalizar, Mongoose cierra la conexión.
 8. La instancia temporal de MongoDB se detiene y sus datos se descartan.
 
-Este mecanismo evita depender de:
-
-- Credenciales de MongoDB Atlas.
-- Una base de datos externa permanentemente disponible.
-- Una conexión a internet durante la ejecución de las pruebas, una vez descargado el ejecutable de MongoDB.
-- Datos cargados manualmente antes de ejecutar los tests.
-- Limpieza manual de colecciones entre ejecuciones.
-
-**Nota:** durante la primera ejecución, `mongodb-memory-server` puede necesitar descargar el ejecutable de MongoDB. Las ejecuciones posteriores pueden reutilizar el ejecutable descargado.
+**Nota:** durante la primera ejecución, `mongodb-memory-server` puede necesitar descargar el ejecutable de MongoDB.
 
 ### Configuración de Mocha
 
@@ -816,40 +849,20 @@ Este script:
 4. Busca los archivos terminados en `.test.js`.
 5. Establece un timeout general de 10 segundos por test.
 
-La inicialización de MongoDB en memoria dispone de un timeout específico de 120 segundos para contemplar el tiempo necesario durante el primer inicio.
+La inicialización de MongoDB en memoria dispone de un timeout específico de 120 segundos.
 
 ### Configuración de MongoDB para testing
 
-El archivo responsable de preparar el entorno es:
+Archivo:
 
 ```text
 tests/config/test.setup.js
 ```
 
-Este archivo utiliza los hooks globales de Mocha:
+Utiliza los hooks globales de Mocha:
 
 - `before`: inicia MongoDB en memoria y conecta Mongoose.
 - `after`: desconecta Mongoose y detiene MongoDB.
-
-La conexión se establece utilizando la URI temporal generada por `MongoMemoryServer`.
-
-Por lo tanto, los tests no necesitan utilizar la variable `MONGODB_URI` de MongoDB Atlas.
-
-### Configuración de la aplicación
-
-El archivo:
-
-```text
-src/config/config.js
-```
-
-Distingue entre el entorno de testing y los demás entornos.
-
-En desarrollo, la aplicación continúa utilizando las variables definidas en `.env` para conectarse a MongoDB Atlas.
-
-En testing, no se exige una URI externa de MongoDB, ya que la conexión es administrada por `tests/config/test.setup.js`.
-
-Esta separación permite mantener el funcionamiento habitual de ShipNow sin afectar la ejecución de los tests.
 
 ### Organización de las pruebas
 
@@ -858,11 +871,13 @@ tests/
 ├── config/
 │   └── test.setup.js
 ├── users/
-│   └── users.test.js
+│   ├── users.test.js
+│   └── documents.test.js
 ├── orders/
 │   └── orders.test.js
 ├── deliveries/
-│   └── deliveries.test.js
+│   ├── deliveries.test.js
+│   └── proofs.test.js
 ├── mocks/
 │   └── mocks.test.js
 ├── logger/
@@ -870,8 +885,6 @@ tests/
 └── swagger/
     └── swagger.test.js
 ```
-
-Cada archivo agrupa las pruebas relacionadas con un recurso o componente de la aplicación.
 
 ### Tests de Users
 
@@ -925,8 +938,6 @@ Se verifica:
 13. Devolver HTTP 404 al actualizar un pedido inexistente.
 14. Devolver HTTP 404 al eliminar un pedido inexistente.
 
-Se comprueba la persistencia de los pedidos en MongoDB y la aplicación de las reglas de negocio.
-
 ### Tests de Deliveries
 
 Archivo:
@@ -956,8 +967,6 @@ Se verifica:
 15. Impedir cambiar el pedido asociado a una entrega.
 16. Devolver HTTP 404 para una entrega inexistente.
 
-Los tests crean usuarios, pedidos y entregas temporales para comprobar las relaciones entre los documentos y las reglas de negocio.
-
 ### Tests de Mocks
 
 Archivo:
@@ -984,10 +993,6 @@ Se verifica:
 12. Rechazar cantidades no numéricas.
 13. Impedir ejecutar el Seed en testing.
 
-También se verifica que las respuestas no expongan contraseñas.
-
-Los endpoints GET generan datos en memoria sin insertarlos en MongoDB.
-
 ### Tests de Logger
 
 Archivo:
@@ -1004,8 +1009,6 @@ Se verifica:
 2. La configuración de los seis niveles personalizados de Winston.
 3. La utilización del nivel `debug` durante testing.
 4. La existencia del transporte de consola.
-
-Se comprueba tanto la integración HTTP como aspectos de la configuración de Winston.
 
 ### Tests de Swagger
 
@@ -1034,23 +1037,426 @@ Se verifica:
 | Mocks | 13 | Correcto |
 | Logger | 4 | Correcto |
 | Swagger | 4 | Correcto |
-| **Total** | **61** | **61 passing** |
+| **Total Módulo 6** | **61** | **61 passing** |
 
-### Ejecución reproducible desde cero
+Los tests del Módulo 7 se detallan en la siguiente sección.
 
-Para ejecutar las pruebas en una computadora nueva, primero se debe clonar el repositorio:
+## Carga de archivos con Multer — Módulo 7
+
+En el Módulo 7 se incorporó la funcionalidad de carga de archivos para usuarios y entregas mediante Multer.
+
+Esta funcionalidad permite almacenar archivos localmente y registrar sus metadatos en MongoDB.
+
+### Objetivos
+
+- Permitir subir documentos asociados a usuarios.
+- Permitir subir licencias de conducir.
+- Permitir subir comprobantes asociados a entregas.
+- Validar los formatos permitidos.
+- Limitar el tamaño máximo de los archivos.
+- Generar nombres únicos.
+- Organizar los archivos por categorías.
+- Persistir metadatos en MongoDB.
+- Centralizar el manejo de errores.
+- Documentar los endpoints en Swagger.
+- Incorporar tests automatizados.
+
+### Dependencia principal
+
+Se incorporó Multer:
+
+```bash
+npm install multer
+```
+
+Multer permite procesar solicitudes HTTP con contenido `multipart/form-data`.
+
+### Configuración centralizada
+
+Archivo:
+
+```text
+src/middlewares/upload.middleware.js
+```
+
+El middleware centraliza la configuración de almacenamiento, validaciones y límites de tamaño.
+
+Utiliza `multer.diskStorage()` para guardar los archivos en el sistema de archivos local.
+
+### Carpetas de almacenamiento
+
+```text
+uploads/
+├── temp/
+├── user-documents/
+├── driver-licenses/
+└── delivery-proofs/
+```
+
+Cada carpeta cumple una función:
+
+| Carpeta | Descripción |
+|---|---|
+| `temp/` | Almacenamiento temporal de documentos |
+| `user-documents/` | Documentos generales de usuarios |
+| `driver-licenses/` | Licencias de conducir |
+| `delivery-proofs/` | Comprobantes de entregas |
+
+Los archivos de usuarios se reciben inicialmente en `temp/` y posteriormente se trasladan a su carpeta definitiva según el tipo de documento.
+
+### Formatos permitidos
+
+Se aceptan los siguientes tipos:
+
+| Formato | MIME |
+|---|---|
+| PDF | `application/pdf` |
+| JPG/JPEG | `image/jpeg` |
+| PNG | `image/png` |
+| WebP | `image/webp` |
+
+El middleware valida la extensión y el tipo MIME declarado del archivo.
+
+Los archivos con formatos no permitidos generan un error HTTP `400`.
+
+### Tamaño máximo
+
+El tamaño máximo permitido es:
+
+```text
+5 MB por archivo
+```
+
+Los archivos que superan este límite generan:
+
+```text
+HTTP 413
+FILE_TOO_LARGE
+```
+
+### Nombres únicos
+
+Para evitar colisiones entre archivos, se utiliza `randomUUID()`.
+
+Ejemplo:
+
+```text
+390f9446-1a84-4294-b0cd-51120118d839.png
+```
+
+Se conserva la extensión original del archivo.
+
+### Documentos de usuarios
+
+Endpoint:
+
+```http
+POST /api/users/:id/documents
+```
+
+Tipo de contenido:
+
+```text
+multipart/form-data
+```
+
+Campos:
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `documentType` | Text | Tipo de documento |
+| `document` | File | Archivo adjunto |
+
+Valores admitidos para `documentType`:
+
+```text
+user_document
+driver_license
+```
+
+Ejemplo de solicitud mediante cURL:
+
+```bash
+curl -X POST "http://localhost:8080/api/users/ID_DEL_USUARIO/documents" \
+  -F "documentType=user_document" \
+  -F "document=@documento.pdf"
+```
+
+El servicio verifica la existencia del usuario y registra los metadatos del documento en el arreglo `documents`.
+
+Los documentos generales se almacenan en:
+
+```text
+uploads/user-documents/
+```
+
+Las licencias se almacenan en:
+
+```text
+uploads/driver-licenses/
+```
+
+### Comprobantes de entregas
+
+Endpoint:
+
+```http
+POST /api/deliveries/:id/proof
+```
+
+Tipo de contenido:
+
+```text
+multipart/form-data
+```
+
+Campo requerido:
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `proof` | File | Comprobante de entrega |
+
+Ejemplo de solicitud mediante cURL:
+
+```bash
+curl -X POST "http://localhost:8080/api/deliveries/ID_DE_LA_ENTREGA/proof" \
+  -F "proof=@comprobante.png"
+```
+
+Los archivos se almacenan en:
+
+```text
+uploads/delivery-proofs/
+```
+
+Los metadatos se incorporan al arreglo `proofs` de la entrega.
+
+Una entrega puede almacenar varios comprobantes.
+
+La carga de comprobantes no modifica automáticamente el estado de la entrega.
+
+### Persistencia de metadatos
+
+Los archivos se almacenan físicamente en el servidor.
+
+MongoDB conserva los metadatos asociados a cada archivo.
+
+Los campos registrados incluyen:
+
+| Campo | Descripción |
+|---|---|
+| `originalName` | Nombre original del archivo |
+| `fileName` | Nombre único generado |
+| `path` | Ruta del archivo almacenado |
+| `mimeType` | Tipo MIME |
+| `size` | Tamaño en bytes |
+| `documentType` | Categoría del documento |
+| `uploadedAt` | Fecha de carga |
+
+Estos metadatos se incorporan a los modelos:
+
+```text
+src/models/user.model.js
+src/models/delivery.model.js
+```
+
+Los documentos de usuarios se almacenan en `documents`.
+
+Los comprobantes de entregas se almacenan en `proofs`.
+
+### Manejo de errores
+
+El middleware global transforma los errores de carga en respuestas HTTP consistentes.
+
+| Código | HTTP | Descripción |
+|---|---|---|
+| `FILE_REQUIRED` | 400 | No se adjuntó un archivo |
+| `INVALID_FILE_TYPE` | 400 | Formato no permitido |
+| `FILE_TOO_LARGE` | 413 | Archivo demasiado grande |
+| `INVALID_FILE_FIELD` | 400 | Nombre del campo incorrecto |
+| `INVALID_DOCUMENT_TYPE` | 400 | Tipo de documento inválido |
+| `FILE_UPLOAD_ERROR` | 500 | Error de carga |
+
+También se contemplan errores relacionados con identificadores inválidos y recursos inexistentes.
+
+Ejemplo:
+
+```json
+{
+  "status": "error",
+  "message": "Es obligatorio adjuntar un archivo",
+  "code": "FILE_REQUIRED"
+}
+```
+
+### Integración con Winston
+
+Las cargas exitosas generan registros informativos.
+
+Ejemplo:
+
+```text
+[info] Documento cargado correctamente
+```
+
+Los errores controlados se registran con nivel `warning`.
+
+Esto permite mantener un registro de las operaciones realizadas.
+
+### Documentación Swagger
+
+Se actualizaron:
+
+```text
+src/docs/users.yaml
+src/docs/deliveries.yaml
+src/docs/schemas.yaml
+```
+
+Los endpoints utilizan el tipo de contenido:
+
+```yaml
+multipart/form-data
+```
+
+Los archivos se representan mediante:
+
+```yaml
+type: string
+format: binary
+```
+
+Se incorporó el esquema reutilizable:
+
+```text
+UploadedDocument
+```
+
+La documentación permite probar la carga de archivos directamente desde Swagger UI.
+
+### Tests automatizados de documentos
+
+Archivo:
+
+```text
+tests/users/documents.test.js
+```
+
+Se implementaron **9 tests**.
+
+Se verifica:
+
+1. Subir un documento de usuario correctamente.
+2. Subir una licencia de conducir correctamente.
+3. Rechazar una carga sin archivo.
+4. Rechazar un tipo de documento inválido.
+5. Rechazar formatos no permitidos.
+6. Rechazar archivos superiores a 5 MB.
+7. Devolver HTTP 404 para usuarios inexistentes.
+8. Rechazar nombres de campo incorrectos.
+9. Rechazar identificadores inválidos.
+
+### Tests automatizados de comprobantes
+
+Archivo:
+
+```text
+tests/deliveries/proofs.test.js
+```
+
+Se implementaron **9 tests**.
+
+Se verifica:
+
+1. Subir un comprobante correctamente.
+2. Permitir varios comprobantes por entrega.
+3. Conservar el estado de la entrega.
+4. Rechazar cargas sin archivo.
+5. Rechazar formatos no permitidos.
+6. Rechazar archivos superiores a 5 MB.
+7. Devolver HTTP 404 para entregas inexistentes.
+8. Rechazar nombres de campo incorrectos.
+9. Rechazar identificadores inválidos.
+
+### Resumen de tests del Módulo 7
+
+| Componente | Tests |
+|---|---:|
+| Documentos de usuarios | 9 |
+| Comprobantes de entregas | 9 |
+| **Total nuevos** | **18** |
+
+### Resultado general de testing
+
+| Módulo | Tests | Resultado |
+|---|---:|---|
+| Users | 10 | Correcto |
+| Orders | 14 | Correcto |
+| Deliveries | 16 | Correcto |
+| Mocks | 13 | Correcto |
+| Logger | 4 | Correcto |
+| Swagger | 4 | Correcto |
+| User Documents | 9 | Correcto |
+| Delivery Proofs | 9 | Correcto |
+| **Total** | **79** | **79 passing** |
+
+Para ejecutar todos los tests:
+
+```bash
+npm test
+```
+
+Resultado obtenido:
+
+```text
+MongoDB en memoria iniciado para testing
+
+79 passing (2s)
+
+MongoDB en memoria detenido
+```
+
+Los mensajes `warning` que aparecen durante las pruebas corresponden a errores provocados intencionalmente.
+
+### Limpieza de archivos durante testing
+
+Los tests de carga crean archivos temporales para verificar su almacenamiento.
+
+Después de cada prueba se eliminan los archivos generados por los casos de testing.
+
+También se eliminan los documentos temporales de MongoDB.
+
+Esto permite ejecutar las pruebas repetidamente sin acumular archivos de prueba.
+
+### Seguridad y consideraciones
+
+- Los archivos tienen un tamaño máximo permitido.
+- Se restringen las extensiones y tipos MIME declarados.
+- Los nombres de almacenamiento se generan mediante UUID.
+- Los documentos se organizan en carpetas específicas.
+- Los archivos cargados no se incluyen en GitHub.
+- Los errores se gestionan mediante el middleware global.
+- Los metadatos se almacenan en MongoDB.
+
+Para un entorno de producción se recomienda incorporar validación del contenido real de los archivos, controles de autorización y políticas de acceso a los documentos.
+
+## Ejecución reproducible desde cero
+
+Para ejecutar las pruebas en una computadora nueva:
+
+Clonar el repositorio:
 
 ```bash
 git clone https://github.com/C-Lionel/Backend-III_ShipNow.git
 ```
 
-Ingresar a la carpeta del proyecto:
+Ingresar al proyecto:
 
 ```bash
 cd Backend-III_ShipNow
 ```
 
-Instalar las dependencias utilizando el archivo `package-lock.json`:
+Instalar las dependencias:
 
 ```bash
 npm ci
@@ -1065,40 +1471,10 @@ npm test
 Resultado esperado:
 
 ```text
-MongoDB en memoria iniciado para testing
-
-61 passing
-
-MongoDB en memoria detenido
+79 passing
 ```
 
 No es necesario crear un archivo `.env.test` ni configurar una conexión externa de MongoDB para ejecutar estas pruebas.
-
-### Verificación de ejecuciones consecutivas
-
-Para comprobar que las pruebas son reproducibles, se ejecutó la suite varias veces consecutivas.
-
-También se realizó una instalación limpia de dependencias mediante:
-
-```bash
-npm ci
-```
-
-Posteriormente se ejecutó:
-
-```bash
-npm test
-```
-
-Resultado obtenido:
-
-```text
-61 passing (2s)
-```
-
-Los 61 tests finalizaron correctamente después de reinstalar las dependencias.
-
-Esto permitió comprobar que las herramientas de testing, incluido `cross-env`, se encuentran correctamente declaradas e instaladas.
 
 ### Aislamiento y limpieza de datos
 
@@ -1108,23 +1484,19 @@ La suite utiliza dos mecanismos de aislamiento.
 
 Los tests que crean documentos utilizan hooks como `beforeEach` y `afterEach` para preparar y eliminar los datos necesarios.
 
-Esto permite que cada prueba trabaje con registros controlados.
-
 **2. MongoDB temporal**
 
 La instancia creada por `mongodb-memory-server` se inicia al comenzar la suite y se detiene al finalizar.
 
 Los datos de esa instancia se descartan automáticamente.
 
-Por lo tanto:
+De esta manera:
 
 - No es necesario borrar colecciones manualmente.
 - No quedan registros persistentes en MongoDB Atlas.
 - Los tests pueden ejecutarse repetidamente.
 - Cada ejecución comienza con una instancia temporal independiente.
 - Los datos de desarrollo permanecen intactos.
-
-Este mecanismo permite mantener las pruebas aisladas y reproducibles.
 
 ### Pruebas de errores HTTP
 
@@ -1134,34 +1506,7 @@ La suite comprueba respuestas de error, incluyendo:
 - `403` — Operaciones prohibidas.
 - `404` — Recursos inexistentes.
 - `409` — Conflictos.
-
-También se verifica el formato estandarizado de errores de la API:
-
-```json
-{
-  "status": "error",
-  "message": "Usuario no encontrado",
-  "code": "USER_NOT_FOUND"
-}
-```
-
-Este formato es coherente con el middleware global de errores y la documentación Swagger.
-
-### Verificación explícita de errores 404
-
-Se implementaron pruebas específicas para comprobar que la API devuelve HTTP 404 cuando se solicita un recurso inexistente.
-
-Entre los casos cubiertos se encuentran:
-
-- Obtener un usuario inexistente.
-- Obtener un pedido inexistente.
-- Actualizar un pedido inexistente.
-- Eliminar un pedido inexistente.
-- Obtener una entrega inexistente.
-
-Estas pruebas utilizan identificadores válidos de MongoDB que no corresponden a documentos existentes.
-
-De esta manera, se comprueba que la aplicación distingue correctamente entre un identificador inválido y un recurso que no existe.
+- `413` — Archivos demasiado grandes.
 
 ### Mensajes de Winston durante los tests
 
@@ -1169,15 +1514,7 @@ Durante la ejecución pueden aparecer mensajes `warning` de Winston.
 
 Estos mensajes corresponden a errores provocados intencionalmente por los tests.
 
-Por ejemplo:
-
-```text
-[warning] GET /api/users/... - USER_NOT_FOUND: Usuario no encontrado
-```
-
-Estos registros no representan fallos de la suite.
-
-Se utilizan para comprobar que la API responde correctamente ante situaciones de error.
+No representan fallos de la suite.
 
 ### Beneficios del testing
 
@@ -1185,13 +1522,39 @@ Se utilizan para comprobar que la API responde correctamente ante situaciones de
 - Verificar las reglas de negocio.
 - Comprobar las respuestas HTTP.
 - Validar la persistencia de datos.
-- Comprobar las restricciones de seguridad.
-- Reducir las pruebas manuales repetitivas.
-- Facilitar futuras modificaciones del proyecto.
+- Comprobar restricciones de seguridad.
+- Reducir pruebas manuales repetitivas.
+- Facilitar futuras modificaciones.
 - Detectar regresiones.
 - Ejecutar pruebas sin credenciales externas.
-- Garantizar el aislamiento de los datos de desarrollo.
-- Facilitar la reproducción de los tests en otras computadoras.
+- Mantener aislados los datos de desarrollo.
+- Facilitar la reproducción de pruebas en otras computadoras.
+
+## Exclusión de archivos mediante Git
+
+El proyecto utiliza `.gitignore` para evitar incorporar archivos innecesarios o sensibles al repositorio.
+
+Configuración:
+
+```gitignore
+node_modules
+npm-debug.log*
+.DS_Store
+.env
+.env.test
+/logs/
+/uploads/
+```
+
+Esto evita incluir:
+
+- Dependencias instaladas.
+- Variables de entorno.
+- Registros de Winston.
+- Documentos y comprobantes cargados.
+- Archivos temporales del sistema.
+
+Los archivos generados durante la ejecución permanecen almacenados localmente y no forman parte del código fuente.
 
 ## Scripts disponibles
 
@@ -1201,7 +1564,7 @@ Se utilizan para comprobar que la API responde correctamente ante situaciones de
 | `npm ci` | Realizar una instalación limpia y reproducible |
 | `npm run dev` | Ejecutar en desarrollo |
 | `npm start` | Ejecutar la aplicación |
-| `npm test` | Ejecutar los 61 tests con MongoDB en memoria |
+| `npm test` | Ejecutar los 79 tests con MongoDB en memoria |
 
 ## Información de la entrega
 
@@ -1209,17 +1572,28 @@ Se utilizan para comprobar que la API responde correctamente ante situaciones de
 
 **Proyecto:** ShipNow API
 
-**Entrega:** Pre-entrega Módulo 6 — Testing automatizado
+**Entrega:** Pre-entrega Módulo 7 — Carga de archivos con Multer
 
-**Tests implementados:** 61
+**Funcionalidades incorporadas:**
 
-**Resultado:** 61 passing
+- Carga de documentos de usuarios.
+- Carga de licencias de conducir.
+- Carga de comprobantes de entregas.
+- Validación de formatos y tamaños.
+- Almacenamiento local organizado.
+- Persistencia de metadatos en MongoDB.
+- Manejo centralizado de errores.
+- Integración con Winston.
+- Documentación Swagger.
+- Testing automatizado.
 
-**Base de testing:** MongoDB temporal mediante `mongodb-memory-server`
+**Tests implementados:** 79
 
-**Instalación verificada:** `npm ci`
+**Resultado:** 79 passing
 
-**Reproducibilidad:** suite ejecutada correctamente en múltiples ocasiones, sin limpieza manual ni credenciales de MongoDB Atlas.
+**Base de testing:** MongoDB temporal mediante `mongodb-memory-server`.
+
+**Instalación:** Dependencias administradas mediante npm y `package-lock.json`.
 
 **Documentación interactiva:** http://localhost:8080/api/docs
 

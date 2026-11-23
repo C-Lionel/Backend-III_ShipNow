@@ -214,3 +214,95 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /api/users/{id}/documents:
+    post:
+      tags: [Users]
+      summary: Subir documento de usuario
+      description: |
+        Permite adjuntar un documento a un usuario existente mediante Multer.
+
+        Formatos permitidos: PDF, JPG, JPEG, PNG y WebP.
+        Tamaño máximo: 5 MB.
+
+        Los archivos se almacenan en uploads/user-documents/
+        o uploads/driver-licenses/ según el tipo de documento.
+        Sus metadatos se registran en MongoDB.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID del usuario al que se asociará el documento
+          schema:
+            type: string
+            example: "6aca6d6733423606b1b73d02"
+
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - documentType
+                - document
+              properties:
+                documentType:
+                  type: string
+                  description: Tipo de documento que se desea cargar
+                  enum:
+                    - user_document
+                    - driver_license
+                  example: user_document
+                document:
+                  type: string
+                  format: binary
+                  description: Archivo PDF, JPG, JPEG, PNG o WebP de hasta 5 MB
+
+      responses:
+        "200":
+          description: Documento cargado correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      payload:
+                        $ref: "#/components/schemas/User"
+
+        "400":
+          description: |
+            Solicitud inválida.
+            Posibles códigos:
+            FILE_REQUIRED,
+            INVALID_FILE_TYPE,
+            INVALID_FILE_FIELD,
+            INVALID_DOCUMENT_TYPE,
+            INVALID_ID.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+        "404":
+          description: Usuario no encontrado (USER_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+        "413":
+          description: Archivo demasiado grande (FILE_TOO_LARGE)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+        "500":
+          description: Error interno o fallo al guardar el archivo (FILE_UPLOAD_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

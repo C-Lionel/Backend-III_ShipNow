@@ -69,6 +69,23 @@ class DeliveriesController {
       next(error);
     }
   }
+
+  // Cargar comprobante de entrega
+  async uploadProof(req, res, next) {
+    try {
+      const updatedDelivery = await deliveriesService.addProof(
+        req.params.id,
+        req.file
+      );
+
+      res.status(200).json({
+        status: "success",
+        payload: updatedDelivery
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export default new DeliveriesController();

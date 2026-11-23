@@ -141,9 +141,46 @@ export const ErrorDictionary = {
     message: "No es posible cambiar el pedido de una entrega",
     code: "DELIVERY_ORDER_CHANGE_FORBIDDEN"
   },
+  
   SEED_FORBIDDEN: {
     statusCode: 403,
     message: "El seed solo está permitido en desarrollo",
     code: "SEED_FORBIDDEN"
   },
+
+  FILE_REQUIRED: {
+    statusCode: 400,
+    message: "Es obligatorio adjuntar un archivo",
+    code: "FILE_REQUIRED"
+  },
+
+  INVALID_FILE_TYPE: {
+    statusCode: 400,
+    message: "Tipo de archivo no permitido. Solo se aceptan PDF, JPG, PNG y WebP",
+    code: "INVALID_FILE_TYPE"
+  },
+
+  FILE_TOO_LARGE: {
+    statusCode: 413,
+    message: "El archivo supera el tamaño máximo permitido de 5 MB",
+    code: "FILE_TOO_LARGE"
+  },
+
+  INVALID_FILE_FIELD: {
+    statusCode: 400,
+    message: "El campo utilizado para enviar el archivo no es válido",
+    code: "INVALID_FILE_FIELD"
+  },
+
+  INVALID_DOCUMENT_TYPE: {
+    statusCode: 400,
+    message: "El tipo de documento proporcionado no es válido",
+    code: "INVALID_DOCUMENT_TYPE"
+  },
+
+  FILE_UPLOAD_ERROR: {
+    statusCode: 500,
+    message: "Ocurrió un error al guardar el archivo",
+    code: "FILE_UPLOAD_ERROR"
+  }
 };

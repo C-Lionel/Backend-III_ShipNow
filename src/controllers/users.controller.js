@@ -1,3 +1,4 @@
+
 import usersService from "../services/users.service.js";
 
 class UsersController {
@@ -63,6 +64,24 @@ class UsersController {
       return res.status(200).json({
         status: "success",
         payload: deletedUser
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Cargar un documento asociado a un usuario
+  async uploadDocument(req, res, next) {
+    try {
+      const updatedUser = await usersService.addDocument(
+        req.params.id,
+        req.file,
+        req.body.documentType
+      );
+
+      return res.status(200).json({
+        status: "success",
+        payload: updatedUser
       });
     } catch (error) {
       next(error);

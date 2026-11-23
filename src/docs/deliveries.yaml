@@ -241,3 +241,94 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /api/deliveries/{id}/proof:
+    post:
+      tags: [Deliveries]
+      summary: Subir comprobante de entrega
+      description: |
+        Permite adjuntar un comprobante a una entrega existente
+        mediante Multer.
+
+        Formatos permitidos: PDF, JPG, JPEG, PNG y WebP.
+        Tamaño máximo permitido: 5 MB.
+
+        El archivo se guarda en uploads/delivery-proofs/
+        y sus metadatos se registran en MongoDB, dentro
+        del arreglo proofs de la entrega.
+
+        El tipo de documento se establece automáticamente
+        como delivery_proof.
+
+        La carga del comprobante no modifica automáticamente
+        el estado de la entrega.
+
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID de la entrega en MongoDB
+          schema:
+            type: string
+            example: "6acd1a74bed49d6fcca074ed"
+
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - proof
+              properties:
+                proof:
+                  type: string
+                  format: binary
+                  description: Archivo PDF, JPG, JPEG, PNG o WebP de hasta 5 MB
+
+      responses:
+        "200":
+          description: Comprobante cargado correctamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      payload:
+                        $ref: "#/components/schemas/Delivery"
+
+        "400":
+          description: |
+            Solicitud inválida.
+            Posibles códigos:
+            FILE_REQUIRED,
+            INVALID_FILE_TYPE,
+            INVALID_FILE_FIELD,
+            INVALID_DELIVERY_ID.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+        "404":
+          description: Entrega inexistente (DELIVERY_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+        "413":
+          description: Archivo demasiado grande (FILE_TOO_LARGE)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+        "500":
+          description: Error interno o fallo al guardar el archivo (FILE_UPLOAD_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

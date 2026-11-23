@@ -24,6 +24,47 @@ components:
         payload:
           description: Datos devueltos por la operación
 
+    UploadedDocument:
+      type: object
+      description: Metadatos de un archivo cargado mediante Multer.
+      properties:
+        originalName:
+          type: string
+          description: Nombre original del archivo
+          example: documento.pdf
+        fileName:
+          type: string
+          description: Nombre único generado para almacenar el archivo
+          example: 550e8400-e29b-41d4-a716-446655440000.pdf
+        path:
+          type: string
+          description: Ruta donde se almacena el archivo
+          example: uploads/user-documents/550e8400-e29b-41d4-a716-446655440000.pdf
+        mimeType:
+          type: string
+          enum:
+            - application/pdf
+            - image/jpeg
+            - image/png
+            - image/webp
+          example: application/pdf
+        size:
+          type: integer
+          description: Tamaño del archivo en bytes
+          example: 245760
+        documentType:
+          type: string
+          enum:
+            - user_document
+            - driver_license
+            - delivery_proof
+          example: user_document
+        uploadedAt:
+          type: string
+          format: date-time
+          description: Fecha y hora de carga del archivo
+          example: "2026-11-22T18:00:00.000Z"
+
     User:
       type: object
       properties:
@@ -48,16 +89,14 @@ components:
           example: customer
         documents:
           type: array
+          description: |
+            Documentos asociados al usuario.
+            Pueden ser documentos generales o licencias de conducir.
+            Los archivos se almacenan en uploads/user-documents/
+            o uploads/driver-licenses/.
           default: []
           items:
-            type: object
-            properties:
-              name:
-                type: string
-                example: DNI
-              reference:
-                type: string
-                example: documento.pdf
+            $ref: "#/components/schemas/UploadedDocument"
         createdAt:
           type: string
           format: date-time
@@ -210,6 +249,15 @@ components:
           format: date-time
           nullable: true
           example: null
+        proofs:
+          type: array
+          description: |
+            Comprobantes asociados a la entrega.
+            Los archivos se almacenan en uploads/delivery-proofs/.
+            Cada comprobante tiene documentType igual a delivery_proof.
+          default: []
+          items:
+            $ref: "#/components/schemas/UploadedDocument"
         createdAt:
           type: string
           format: date-time
