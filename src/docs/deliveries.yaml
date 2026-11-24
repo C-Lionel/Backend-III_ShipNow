@@ -145,10 +145,17 @@ paths:
     put:
       tags: [Deliveries]
       summary: Actualizar entrega
-      description: >
+      description: |
         Permite actualizar el repartidor, estado y prioridad
-        de una entrega. No permite modificar el pedido asociado.
+        de una entrega.
+
+        No permite modificar el pedido asociado ni los
+        comprobantes de entrega mediante el campo proofs.
+
         Si se indica un repartidor, debe existir y tener rol driver.
+
+        Los comprobantes deben cargarse mediante
+        POST /api/deliveries/{id}/proof.
       requestBody:
         required: true
         content:
@@ -182,12 +189,15 @@ paths:
                       payload:
                         $ref: "#/components/schemas/Delivery"
         "400":
-          description: >
-            ID de entrega inválido (INVALID_DELIVERY_ID),
-            ID de repartidor inválido (INVALID_DRIVER_ID),
-            repartidor no válido (INVALID_DRIVER),
-            cambio de pedido prohibido (DELIVERY_ORDER_CHANGE_FORBIDDEN)
-            o datos inválidos.
+          description: |
+            Solicitud inválida.
+            Posibles causas:
+            - ID de entrega inválido (INVALID_DELIVERY_ID).
+            - ID de repartidor inválido (INVALID_DRIVER_ID).
+            - Repartidor no válido (INVALID_DRIVER).
+            - Cambio de pedido prohibido (DELIVERY_ORDER_CHANGE_FORBIDDEN).
+            - Modificación directa de comprobantes (VALIDATION_ERROR).
+            - Otros datos inválidos.
           content:
             application/json:
               schema:
@@ -251,17 +261,41 @@ paths:
         mediante Multer.
 
         Formatos permitidos: PDF, JPG, JPEG, PNG y WebP.
-        Tamaño máximo permitido: 5 MB.
+        Tamaño máximo permitido: 5 MB (5.242.880 bytes).
+
+        Se aceptan extensiones en mayúsculas y minúsculas.
+        La extensión del nombre de almacenamiento se normaliza
+        automáticamente a minúsculas.
 
         El archivo se guarda en uploads/delivery-proofs/
         y sus metadatos se registran en MongoDB, dentro
         del arreglo proofs de la entrega.
+
+        Las carpetas de almacenamiento se crean automáticamente
+        al inicializar el middleware.
+
+        Los metadatos se registran utilizando rutas relativas
+        al directorio uploads/, sin incluir rutas absolutas
+        del sistema operativo.
+
+        Ejemplo de ruta almacenada:
+
+        - delivery-proofs/550e8400-e29b-41d4-a716-446655440000.png
+
+        Esto permite mantener la portabilidad entre distintos
+        sistemas operativos y entornos de ejecución.
 
         El tipo de documento se establece automáticamente
         como delivery_proof.
 
         La carga del comprobante no modifica automáticamente
         el estado de la entrega.
+
+        Se pueden asociar varios comprobantes a una misma entrega,
+        realizando una solicitud por cada archivo.
+
+        Si falla la operación después de recibir el archivo,
+        se intenta eliminar automáticamente el archivo físico.
 
       parameters:
         - name: id

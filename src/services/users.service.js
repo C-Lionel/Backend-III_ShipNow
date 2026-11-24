@@ -12,7 +12,11 @@ import usersRepository from "../repositories/users.repository.js";
 import AppError from "../utils/errors.js";
 import { ErrorDictionary } from "../utils/errorDictionary.js";
 import logger from "../utils/logger.js";
-import { moveUserDocument } from "../middlewares/upload.middleware.js";
+
+import {
+  moveUserDocument,
+  getRelativeUploadPath
+} from "../middlewares/upload.middleware.js";
 
 const ALLOWED_USER_DOCUMENT_TYPES = [
   DOCUMENT_TYPES.USER_DOCUMENT,
@@ -71,6 +75,7 @@ class UsersService {
       throw new AppError(ErrorDictionary.USER_ROLE_UPDATE_FORBIDDEN);
     }
 
+    // Los documentos solo pueden agregarse mediante Multer.
     if (dataToUpdate.documents !== undefined) {
       throw new AppError(ErrorDictionary.VALIDATION_ERROR);
     }
@@ -134,10 +139,11 @@ class UsersService {
 
       moveUserDocument(file, documentType);
 
+      // Guardar la ruta relativa a uploads para garantizar portabilidad.
       const document = {
         originalName: file.originalname,
         fileName: file.filename,
-        path: file.path,
+        path: getRelativeUploadPath(file.path),
         mimeType: file.mimetype,
         size: file.size,
         documentType,
@@ -159,6 +165,7 @@ class UsersService {
       return updatedUser;
 
     } catch (error) {
+      // Eliminar el archivo físico si falla la operación.
       if (file?.path) {
         try {
           await fs.unlink(file.path);

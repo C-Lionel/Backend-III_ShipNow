@@ -120,7 +120,12 @@ paths:
     put:
       tags: [Users]
       summary: Actualizar usuario
-      description: Permite actualizar datos del usuario, pero no su rol.
+      description: |
+        Permite actualizar datos del usuario, pero no su rol
+        ni los documentos asociados.
+
+        Los documentos únicamente pueden cargarse mediante
+        POST /api/users/{id}/documents.
       requestBody:
         required: true
         content:
@@ -156,7 +161,10 @@ paths:
                       payload:
                         $ref: "#/components/schemas/User"
         "400":
-          description: ID, datos o contraseña inválidos
+          description: |
+            ID, datos o contraseña inválidos.
+            También se rechaza la modificación directa de documentos
+            mediante el código VALIDATION_ERROR.
           content:
             application/json:
               schema:
@@ -223,11 +231,33 @@ paths:
         Permite adjuntar un documento a un usuario existente mediante Multer.
 
         Formatos permitidos: PDF, JPG, JPEG, PNG y WebP.
-        Tamaño máximo: 5 MB.
+        Tamaño máximo: 5 MB (5.242.880 bytes).
+
+        Se aceptan extensiones en mayúsculas y minúsculas.
+        La extensión del nombre de almacenamiento se normaliza
+        automáticamente a minúsculas.
 
         Los archivos se almacenan en uploads/user-documents/
         o uploads/driver-licenses/ según el tipo de documento.
-        Sus metadatos se registran en MongoDB.
+
+        Las carpetas de almacenamiento se crean automáticamente
+        al inicializar el middleware.
+
+        Los metadatos se registran en MongoDB utilizando rutas
+        relativas al directorio uploads/, sin incluir rutas
+        absolutas del sistema operativo.
+
+        Ejemplos de rutas almacenadas:
+
+        - user-documents/550e8400-e29b-41d4-a716-446655440000.pdf
+        - driver-licenses/550e8400-e29b-41d4-a716-446655440001.png
+
+        Esto permite mantener la portabilidad entre distintos
+        sistemas operativos y entornos de ejecución.
+
+        Si falla la operación después de recibir el archivo,
+        se intenta eliminar automáticamente el archivo físico.
+
       parameters:
         - name: id
           in: path

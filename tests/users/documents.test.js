@@ -7,6 +7,10 @@ import path from "node:path";
 import app from "../../src/app.js";
 import User from "../../src/models/user.model.js";
 
+import {
+  resolveUploadPath
+} from "../../src/middlewares/upload.middleware.js";
+
 describe("Users - Document Upload API", function () {
   let userId;
   let userEmail;
@@ -34,21 +38,29 @@ describe("Users - Document Upload API", function () {
   });
 
   after(async function () {
-    // Eliminar los archivos que se hayan registrado
-    for (const filePath of uploadedPaths) {
-      await fs.unlink(filePath).catch(() => {});
-    }
-
-    // Eliminar los documentos asociados al usuario
+    // Recuperar los documentos asociados al usuario.
     const user = await User.findById(userId);
 
     if (user) {
       for (const document of user.documents ?? []) {
         if (document.path) {
-          await fs.unlink(document.path).catch(() => {});
+          uploadedPaths.add(
+            resolveUploadPath(document.path)
+          );
         }
       }
     }
+
+    // Eliminar los archivos físicos registrados.
+    for (const filePath of uploadedPaths) {
+      await fs.unlink(filePath).catch((error) => {
+        if (error.code !== "ENOENT") {
+          throw error;
+        }
+      });
+    }
+
+    uploadedPaths.clear();
 
     await User.deleteOne({ _id: userId });
   });
@@ -69,16 +81,26 @@ describe("Users - Document Upload API", function () {
 
     const document = user.documents[0];
 
+    const absolutePath = resolveUploadPath(document.path);
+    uploadedPaths.add(absolutePath);
+
     expect(document.originalName).to.equal("documento.png");
     expect(document.documentType).to.equal("user_document");
     expect(document.mimeType).to.equal("image/png");
     expect(document.fileName).to.be.a("string");
-    expect(document.path).to.include("user-documents");
     expect(document.size).to.be.greaterThan(0);
 
-    uploadedPaths.add(document.path);
+    // Verificar que MongoDB almacene una ruta relativa y portable.
+    expect(document.path).to.equal(
+      `user-documents/${document.fileName}`
+    );
 
-    const fileStats = await fs.stat(document.path);
+    expect(path.isAbsolute(document.path)).to.equal(false);
+    expect(document.path).to.not.include("\\");
+
+    // Verificar la existencia física del archivo.
+    const fileStats = await fs.stat(absolutePath);
+
     expect(fileStats.isFile()).to.equal(true);
   });
 
@@ -100,12 +122,23 @@ describe("Users - Document Upload API", function () {
     );
 
     expect(license).to.exist;
+
+    const absolutePath = resolveUploadPath(license.path);
+    uploadedPaths.add(absolutePath);
+
     expect(license.originalName).to.equal("licencia.png");
-    expect(license.path).to.include("driver-licenses");
 
-    uploadedPaths.add(license.path);
+    // Verificar que la licencia tenga una ruta relativa y portable.
+    expect(license.path).to.equal(
+      `driver-licenses/${license.fileName}`
+    );
 
-    const fileStats = await fs.stat(license.path);
+    expect(path.isAbsolute(license.path)).to.equal(false);
+    expect(license.path).to.not.include("\\");
+
+    // Verificar la existencia física de la licencia.
+    const fileStats = await fs.stat(absolutePath);
+
     expect(fileStats.isFile()).to.equal(true);
   });
 
@@ -196,9 +229,11 @@ describe("Users - Document Upload API", function () {
     expect(response.body.code).to.equal("INVALID_ID");
   });
 
-
   it("debería impedir modificar documentos mediante PUT", async function () {
     const userBefore = await User.findById(userId);
+
+    expect(userBefore.documents).to.not.be.empty;
+
     const originalDocuments = userBefore.documents.map(
       (document) => document.fileName
     );
@@ -218,6 +253,49 @@ describe("Users - Document Upload API", function () {
     expect(
       userAfter.documents.map((document) => document.fileName)
     ).to.deep.equal(originalDocuments);
+  });
+
+
+  it("debería aceptar archivos con extensiones en mayúsculas", async function () {
+    const response = await request(app)
+      .post(`/api/users/${userId}/documents`)
+      .field("documentType", "user_document")
+      .attach("document", validPng, {
+        filename: "documento.PNG",
+        contentType: "image/png"
+      });
+
+    expect(response.status).to.equal(200);
+    expect(response.body.status).to.equal("success");
+
+    const user = await User.findById(userId);
+
+    const document = user.documents.find(
+      (document) => document.originalName === "documento.PNG"
+    );
+
+    expect(document).to.exist;
+
+    const absolutePath = resolveUploadPath(document.path);
+    uploadedPaths.add(absolutePath);
+
+    expect(document.originalName).to.equal("documento.PNG");
+    expect(document.mimeType).to.equal("image/png");
+
+    // Verificar que la extensión se normalice a minúsculas.
+    expect(path.extname(document.fileName)).to.equal(".png");
+
+    // Verificar que la ruta sea relativa.
+    expect(document.path).to.equal(
+      `user-documents/${document.fileName}`
+    );
+
+    expect(path.isAbsolute(document.path)).to.equal(false);
+
+    // Verificar la existencia física del archivo.
+    const fileStats = await fs.stat(absolutePath);
+
+    expect(fileStats.isFile()).to.equal(true);
   });
 
 });

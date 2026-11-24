@@ -11,6 +11,10 @@ import { ErrorDictionary } from "../utils/errorDictionary.js";
 import logger from "../utils/logger.js";
 
 import {
+  getRelativeUploadPath
+} from "../middlewares/upload.middleware.js";
+
+import {
   USER_ROLES,
   DELIVERY_STATUS,
   DELIVERY_PRIORITY,
@@ -171,10 +175,11 @@ class DeliveriesService {
         throw new AppError(ErrorDictionary.DELIVERY_NOT_FOUND);
       }
 
+      // Guardar la ruta relativa a uploads para garantizar portabilidad.
       const proof = {
         originalName: file.originalname,
         fileName: file.filename,
-        path: file.path,
+        path: getRelativeUploadPath(file.path),
         mimeType: file.mimetype,
         size: file.size,
         documentType: DOCUMENT_TYPES.DELIVERY_PROOF,
@@ -198,7 +203,7 @@ class DeliveriesService {
 
       return updatedDelivery;
     } catch (error) {
-      // Eliminar el archivo si falla la operación
+      // Eliminar el archivo físico si falla la operación.
       if (file?.path) {
         try {
           await fs.unlink(file.path);

@@ -34,12 +34,25 @@ components:
           example: documento.pdf
         fileName:
           type: string
-          description: Nombre único generado para almacenar el archivo
+          description: |
+            Nombre único generado mediante UUID para almacenar
+            el archivo, con su extensión normalizada a minúsculas.
           example: 550e8400-e29b-41d4-a716-446655440000.pdf
         path:
           type: string
-          description: Ruta donde se almacena el archivo
-          example: uploads/user-documents/550e8400-e29b-41d4-a716-446655440000.pdf
+          description: |
+            Ruta relativa al directorio uploads/.
+            No incluye el prefijo uploads/ ni rutas absolutas
+            del sistema operativo.
+
+            Utiliza separadores de directorio "/" para mantener
+            la portabilidad entre Windows y Linux.
+
+            Según el tipo de documento, puede comenzar con:
+            - user-documents/
+            - driver-licenses/
+            - delivery-proofs/
+          example: user-documents/550e8400-e29b-41d4-a716-446655440000.pdf
         mimeType:
           type: string
           enum:
@@ -51,6 +64,7 @@ components:
         size:
           type: integer
           description: Tamaño del archivo en bytes
+          maximum: 5242880
           example: 245760
         documentType:
           type: string
@@ -92,8 +106,14 @@ components:
           description: |
             Documentos asociados al usuario.
             Pueden ser documentos generales o licencias de conducir.
-            Los archivos se almacenan en uploads/user-documents/
+
+            Los archivos físicos se almacenan en uploads/user-documents/
             o uploads/driver-licenses/.
+
+            Los metadatos contienen rutas relativas a uploads/.
+
+            La modificación directa de documentos mediante PUT
+            no está permitida.
           default: []
           items:
             $ref: "#/components/schemas/UploadedDocument"
@@ -253,8 +273,17 @@ components:
           type: array
           description: |
             Comprobantes asociados a la entrega.
-            Los archivos se almacenan en uploads/delivery-proofs/.
+
+            Los archivos físicos se almacenan en uploads/delivery-proofs/.
+            Los metadatos contienen rutas relativas a uploads/.
+
             Cada comprobante tiene documentType igual a delivery_proof.
+
+            Se pueden asociar varios comprobantes a una misma entrega,
+            realizando una solicitud por cada archivo.
+
+            La modificación directa de comprobantes mediante PUT
+            no está permitida.
           default: []
           items:
             $ref: "#/components/schemas/UploadedDocument"

@@ -3,12 +3,17 @@ import { expect } from "chai";
 import request from "supertest";
 import mongoose from "mongoose";
 import fs from "node:fs/promises";
+import path from "node:path";
 
 import app from "../../src/app.js";
 
 import User from "../../src/models/user.model.js";
 import Order from "../../src/models/order.model.js";
 import Delivery from "../../src/models/delivery.model.js";
+
+import {
+  resolveUploadPath
+} from "../../src/middlewares/upload.middleware.js";
 
 import {
   USER_ROLES,
@@ -70,14 +75,21 @@ describe("Deliveries - Proof Upload API", function () {
       if (savedDelivery) {
         for (const proof of savedDelivery.proofs ?? []) {
           if (proof.path) {
-            uploadedPaths.add(proof.path);
+            uploadedPaths.add(
+              resolveUploadPath(proof.path)
+            );
           }
         }
       }
     }
 
+    // Eliminar los archivos físicos registrados.
     for (const filePath of uploadedPaths) {
-      await fs.unlink(filePath).catch(() => {});
+      await fs.unlink(filePath).catch((error) => {
+        if (error.code !== "ENOENT") {
+          throw error;
+        }
+      });
     }
 
     uploadedPaths.clear();
@@ -110,18 +122,27 @@ describe("Deliveries - Proof Upload API", function () {
 
     const proof = savedDelivery.proofs[0];
 
+    const absolutePath = resolveUploadPath(proof.path);
+    uploadedPaths.add(absolutePath);
+
     expect(proof.originalName).to.equal("comprobante.png");
     expect(proof.mimeType).to.equal("image/png");
     expect(proof.documentType).to.equal(
       DOCUMENT_TYPES.DELIVERY_PROOF
     );
     expect(proof.fileName).to.be.a("string");
-    expect(proof.path).to.include("delivery-proofs");
     expect(proof.size).to.be.greaterThan(0);
 
-    uploadedPaths.add(proof.path);
+    // Verificar que MongoDB almacene una ruta relativa y portable.
+    expect(proof.path).to.equal(
+      `delivery-proofs/${proof.fileName}`
+    );
 
-    const fileStats = await fs.stat(proof.path);
+    expect(path.isAbsolute(proof.path)).to.equal(false);
+    expect(proof.path).to.not.include("\\");
+
+    // Verificar la existencia física del comprobante.
+    const fileStats = await fs.stat(absolutePath);
 
     expect(fileStats.isFile()).to.equal(true);
   });
@@ -150,7 +171,22 @@ describe("Deliveries - Proof Upload API", function () {
     expect(fileNames[0]).to.not.equal(fileNames[1]);
 
     for (const proof of savedDelivery.proofs) {
-      uploadedPaths.add(proof.path);
+      const absolutePath = resolveUploadPath(proof.path);
+
+      uploadedPaths.add(absolutePath);
+
+      // Verificar que cada comprobante tenga una ruta relativa.
+      expect(proof.path).to.equal(
+        `delivery-proofs/${proof.fileName}`
+      );
+
+      expect(path.isAbsolute(proof.path)).to.equal(false);
+      expect(proof.path).to.not.include("\\");
+
+      // Verificar que ambos archivos existan físicamente.
+      const fileStats = await fs.stat(absolutePath);
+
+      expect(fileStats.isFile()).to.equal(true);
     }
   });
 
@@ -168,7 +204,9 @@ describe("Deliveries - Proof Upload API", function () {
     );
 
     for (const proof of savedDelivery.proofs) {
-      uploadedPaths.add(proof.path);
+      uploadedPaths.add(
+        resolveUploadPath(proof.path)
+      );
     }
   });
 
@@ -243,7 +281,6 @@ describe("Deliveries - Proof Upload API", function () {
     expect(response.body.code).to.equal("INVALID_DELIVERY_ID");
   });
 
-
   it("debería impedir modificar comprobantes mediante PUT", async function () {
     // Primero subimos un comprobante válido.
     const uploadResponse = await request(app)
@@ -280,5 +317,4 @@ describe("Deliveries - Proof Upload API", function () {
       deliveryAfter.proofs.map((proof) => proof.fileName)
     ).to.deep.equal(originalFileNames);
   });
-
 });

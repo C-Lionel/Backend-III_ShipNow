@@ -36,6 +36,37 @@ for (const folder of Object.values(UPLOAD_FOLDERS)) {
   });
 }
 
+// Convertir una ruta absoluta en una ruta relativa a uploads
+export const getRelativeUploadPath = (absolutePath) => {
+  const relativePath = path.relative(
+    UPLOADS_DIR,
+    absolutePath
+  );
+
+  if (
+    relativePath === ".." ||
+    relativePath.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relativePath)
+  ) {
+    throw new AppError(ErrorDictionary.VALIDATION_ERROR);
+  }
+
+  return relativePath.split(path.sep).join("/");
+};
+
+// Resolver una ruta de almacenamiento a su ubicación absoluta
+export const resolveUploadPath = (storedPath) => {
+  const absolutePath = path.resolve(
+    UPLOADS_DIR,
+    storedPath
+  );
+
+  // Verificar que la ruta permanezca dentro de uploads
+  getRelativeUploadPath(absolutePath);
+
+  return absolutePath;
+};
+
 // Configuración centralizada del almacenamiento
 const createStorage = (folder) => multer.diskStorage({
   destination: (req, file, cb) => {
